@@ -24,6 +24,10 @@ import com.gmail.maystruks08.remotecommunication.devices.HostDeviceImpl
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
+import java.net.Inet4Address
+import java.net.InetAddress
+import java.net.NetworkInterface
+import java.net.SocketException
 import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
 
@@ -226,11 +230,10 @@ class CommunicationManagerImpl(
             wifiP2pManager.requestPeers(channel) { wifiP2pDeviceList ->
                 logger.log("$TAG requestPeers wifiP2pDeviceList size:${wifiP2pDeviceList.deviceList.size}")
                 val clients =
-                    wifiP2pDeviceList.deviceList.filter { !it.deviceName.contains("samsung", true) }
-                        .map {
-                            logger.log("$TAG requestPeers DEVICE ${it.deviceName}")
-                            deviceFactory.create(it)
-                        }
+                    wifiP2pDeviceList.deviceList.map {
+                        logger.log("$TAG requestPeers DEVICE ${it.deviceName}")
+                        deviceFactory.create(it)
+                    }
                 if (devices.size != clients.size) {
                     devices.clear()
                     devices.addAll(clients)
@@ -306,6 +309,56 @@ class CommunicationManagerImpl(
                 logger.log("$TAG disconnectDevice onFailure:$i")
             }
         })
+    }
+
+    //todo move this to socket factory
+    /**
+     * This method get local ip and thy to ping in parallel all ips in network
+     * This is a resource-intensive call, need to avoid often using this method!
+     */
+    @Suppress("BlockingMethodInNonBlockingContext")
+    suspend fun getAllIpsInLocaleNetwork(): List<InetAddress> {
+        return withContext(Dispatchers.IO) {
+            val listOfIpAddressesInLocalNetwork = mutableListOf<InetAddress>()
+            val ipString = getLocalIpAddress().orEmpty()
+            val prefix = ipString.substring(0, ipString.lastIndexOf(".") + 1)
+            val deferredList = mutableListOf<Deferred<Any>>()
+            for (i in 0..254) {
+                deferredList.add(
+                    async {
+                        val testIp = "$prefix$i"
+                        val inetAddress = InetAddress.getByName(testIp)
+                        if (inetAddress.isReachable(300)) {
+                            logger.log("testIp: $testIp isReachable = true")
+                            listOfIpAddressesInLocalNetwork.add(inetAddress)
+                        }
+                    }
+                )
+            }
+            deferredList.awaitAll()
+            return@withContext listOfIpAddressesInLocalNetwork
+        }
+    }
+
+    private fun getLocalIpAddress(): String? {
+        try {
+            val enumeration = NetworkInterface.getNetworkInterfaces()
+            while (enumeration.hasMoreElements()) {
+                val networkInterface = enumeration.nextElement()
+                val enumIpAddress = networkInterface.inetAddresses
+                while (enumIpAddress.hasMoreElements()) {
+                    val internetAddress = enumIpAddress.nextElement()
+                    logger.log("Communication nextElement -> internetAddress.hostAddress ${internetAddress.hostAddress}")
+                    if (!internetAddress.isLoopbackAddress && internetAddress is Inet4Address) {
+                        return internetAddress.hostAddress
+                    }
+                }
+            }
+        } catch (e: SocketException) {
+            logger.log("Communication -> getLocalIpAddress error: ${e.localizedMessage}")
+        }
+        logger.log("Communication -> getLocalIpAddress return null")
+        return null
     }
 
     companion object {

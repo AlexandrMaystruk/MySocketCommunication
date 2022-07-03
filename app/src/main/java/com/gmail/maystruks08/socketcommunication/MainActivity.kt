@@ -8,15 +8,17 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.*
+import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.lifecycleScope
 import com.gmail.maystruks08.communicationinterface.CommunicationLogger
 import com.gmail.maystruks08.communicationinterface.entity.TransferData
@@ -25,14 +27,11 @@ import com.gmail.maystruks08.socketcommunication.ui.theme.SocketCommunicationThe
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.rememberPermissionState
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
 
-    val stringBuilder = StringBuilder()
-    val state = MutableStateFlow(stringBuilder.toString())
-
+    private val logsList = mutableStateListOf<String>()
     var messageCount = 0
 
     private val communicationManager: CommunicationManagerImpl by lazy {
@@ -43,18 +42,12 @@ class MainActivity : ComponentActivity() {
             object : CommunicationLogger {
                 override fun log(message: String) {
                     Log.d("CommunicationLogger", message)
-                    stringBuilder.appendLine(message)
-                    lifecycleScope.launch {
-                        state.value = stringBuilder.toString()
-                    }
+                    logsList.add(message)
                 }
 
                 override fun logError(exception: Exception, message: String) {
                     Log.e("CommunicationLogger", message, exception)
-                    stringBuilder.appendLine(message)
-                    lifecycleScope.launch {
-                        state.value = stringBuilder.toString()
-                    }
+                    logsList.add(message)
                 }
             })
     }
@@ -68,8 +61,6 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-//                    val logs = state.collectAsState().value
-
                     val changeWiFiStatePermissionState =
                         rememberPermissionState(permission.CHANGE_WIFI_STATE)
                     val accessWiFiStatePermissionState =
@@ -128,7 +119,9 @@ class MainActivity : ComponentActivity() {
                     }
 
                     if (changeWiFiStatePermissionState.hasPermission && accessWiFiStatePermissionState.hasPermission) {
-                        communicationManager.onResume()
+                        LaunchedEffect(key1 = communicationManager, block = {
+                            communicationManager.onResume()
+                        })
 
                         val isShownChangeOrderStateDialog = remember { mutableStateOf(false) }
                         val broadcastData = remember { mutableStateOf("") }
@@ -196,15 +189,33 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
 
-
-                            val scrollStateVertical = rememberScrollState()
-                            Text(
-                                text = stringBuilder.toString(),
-                                modifier = Modifier.verticalScroll(state = scrollStateVertical)
-                            )
+                            LogsList(logsList)
                         }
                     }
                 }
+            }
+        }
+    }
+
+    @Composable
+    fun LogsList(items: SnapshotStateList<String>) {
+        val listState = rememberLazyListState()
+        LaunchedEffect(items.size) {
+            listState.scrollToItem(items.lastIndex)
+        }
+
+        LazyColumn(state = rememberLazyListState()) {
+            items(items.size) { index ->
+                val textStyle = remember {
+                    TextStyle(
+                        fontFamily = FontFamily.Default,
+                        fontWeight = FontWeight.Normal,
+                        fontSize = 10.sp,
+                        lineHeight = 22.sp,
+                        letterSpacing = 0.5.sp
+                    )
+                }
+                Text(text = items[index], style = textStyle)
             }
         }
     }
@@ -220,6 +231,7 @@ class MainActivity : ComponentActivity() {
 
     private fun getConnectedDevices() {
         lifecycleScope.launch(Dispatchers.IO) {
+            communicationManager.getAllIpsInLocaleNetwork()
 //            communicationManager.getConnectedDevices()
         }
     }
