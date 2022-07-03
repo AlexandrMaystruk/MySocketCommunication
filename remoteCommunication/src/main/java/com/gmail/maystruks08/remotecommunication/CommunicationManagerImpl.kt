@@ -41,6 +41,7 @@ class CommunicationManagerImpl(
 
     private var isSender = false
     var deviceName = "No Name"
+    var isTest = false
 
     lateinit var coroutineScope: CoroutineScope
 
@@ -123,7 +124,10 @@ class CommunicationManagerImpl(
     override suspend fun sendBroadcast(data: TransferData) {
         logger.log("$TAG sendBroadcast")
 
-//        testCommunication(data)
+        if (isTest){
+            testCommunication(data)
+            return
+        }
 
         devices.toList().forEach {
             it.connect()

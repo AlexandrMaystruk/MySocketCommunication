@@ -5,7 +5,9 @@ import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
@@ -15,7 +17,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.lifecycleScope
 import com.gmail.maystruks08.communicationinterface.CommunicationLogger
 import com.gmail.maystruks08.communicationinterface.entity.TransferData
@@ -31,6 +32,8 @@ class MainActivity : ComponentActivity() {
 
     val stringBuilder = StringBuilder()
     val state = MutableStateFlow(stringBuilder.toString())
+
+    var messageCount = 0
 
     private val communicationManager: CommunicationManagerImpl by lazy {
         CommunicationManagerImpl(
@@ -181,6 +184,19 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
 
+                            val isTest = remember { mutableStateOf(false) }
+                            Row {
+                                Text("Test only Client-Server communication")
+                                Checkbox(
+                                    checked = isTest.value,
+                                    onCheckedChange = {
+                                        isTest.value = it
+                                        communicationManager.isTest = it
+                                    }
+                                )
+                            }
+
+
                             val scrollStateVertical = rememberScrollState()
                             Text(
                                 text = stringBuilder.toString(),
@@ -214,9 +230,10 @@ class MainActivity : ComponentActivity() {
                 communicationManager.sendBroadcast(
                     TransferData(
                         200,
-                        "Broadcast message to all devices"
+                        "Broadcast message $messageCount to all devices"
                     )
                 )
+                messageCount++
 
             }.getOrElse {
                 Log.d("CommunicationLogger", "sendDataToRemoteDevices error $it")
