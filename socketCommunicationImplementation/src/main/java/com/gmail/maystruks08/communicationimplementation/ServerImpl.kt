@@ -18,13 +18,16 @@ class ServerImpl(
         runCatching {
             logger.log("Start creation server")
             val socket = factory.createServerSocket().also { serverSocket = it }
-            val client: Client = ClientImpl(
-                client = socket.accept(),
-                logger = logger
-            )
-            val dataFromClient = client.read()
-            logger.log("Server received data: $dataFromClient")
-            onNewDataReceived.invoke(dataFromClient)
+            while (!socket.isClosed){
+                val client: Client = ClientImpl(
+                    client = socket.accept(),
+                    logger = logger
+                )
+                val dataFromClient = client.read()
+                logger.log("Server received data: $dataFromClient")
+                client.close()
+                onNewDataReceived.invoke(dataFromClient)
+            }
         }.getOrElse {
             it.printStackTrace()
             logger.log("Server error: ${it.message}")

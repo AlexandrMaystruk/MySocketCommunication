@@ -12,15 +12,24 @@ class SocketFactoryImpl(
 ) : SocketFactory {
 
     override fun create(config: SocketConfiguration): Socket {
-        return try {
+        runCatching {
             val address = InetSocketAddress(config.ipAddress, config.inputPort)
             logger.log("$TAG Start connect to: $address")
-            Socket().apply {
-                bind(null)
-                connect(address, config.connectTimeout)
+            var attempt = 0
+            var error: Throwable? = null
+            while (attempt < 5) {
+                runCatching {
+                    return Socket().apply { connect(address, config.connectTimeout) }
+                }.getOrElse {
+                    attempt++
+                    val errorMessage = it.message ?: it.localizedMessage
+                    logger.log("$TAG attempt $attempt: Create socket exception: $errorMessage")
+                    if (attempt > 5) error = it
+                }
             }
-        } catch (e: Exception) {
-            val errorMessage = e.message ?: e.localizedMessage
+            throw error ?: Exception("Create socket exception: Attempt $attempt")
+        }.getOrElse {
+            val errorMessage = it.message ?: it.localizedMessage
             logger.log("$TAG Create socket exception: $errorMessage")
             logger.log("$TAG Ip address is reachable: ${ping(config.ipAddress)}")
             throw RemoteError.ConnectionError.CreateSocketError(errorMessage)
@@ -28,7 +37,7 @@ class SocketFactoryImpl(
     }
 
     override fun createServerSocket(): ServerSocket {
-        return try {
+        return runCatching {
             ServerSocket()
                 .apply {
                     reuseAddress = true
@@ -36,8 +45,8 @@ class SocketFactoryImpl(
                     logger.log("$TAG Locale ip address: $localIp")
                     bind(InetSocketAddress(localIp, LOCAL_SERVER_PORT), 55)
                 }
-        } catch (e: Exception) {
-            val errorMessage = e.message ?: e.localizedMessage
+        }.getOrElse {
+            val errorMessage = it.message ?: it.localizedMessage
             logger.log("$TAG Create server socket exception: $errorMessage")
             throw RemoteError.ConnectionError.CreateSocketError(errorMessage)
         }
@@ -53,7 +62,7 @@ class SocketFactoryImpl(
     }
 
     private fun getLocalIpAddress(): String? {
-        try {
+        runCatching {
             val enumeration = NetworkInterface.getNetworkInterfaces()
             while (enumeration.hasMoreElements()) {
                 val networkInterface = enumeration.nextElement()
@@ -65,8 +74,8 @@ class SocketFactoryImpl(
                     }
                 }
             }
-        } catch (e: SocketException) {
-            logger.log("$TAG -> getLocalIpAddress error: ${e.localizedMessage}")
+        }.getOrElse {
+            logger.log("$TAG -> getLocalIpAddress error: ${it.localizedMessage}")
         }
         logger.log("$TAG -> getLocalIpAddress return null")
         return null

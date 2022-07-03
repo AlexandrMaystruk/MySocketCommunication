@@ -6,7 +6,6 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.net.NetworkInfo
-import android.net.wifi.WifiManager
 import android.net.wifi.p2p.WifiP2pDevice
 import android.net.wifi.p2p.WifiP2pManager
 import android.os.Looper
@@ -25,6 +24,8 @@ import com.gmail.maystruks08.remotecommunication.devices.HostDeviceImpl
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlin.coroutines.resume
+import kotlin.coroutines.suspendCoroutine
 
 @SuppressLint("MissingPermission")
 class CommunicationManagerImpl(
@@ -105,12 +106,14 @@ class CommunicationManagerImpl(
             val socket = socketFactory.create(config)
             ClientImpl(socket, logger).also {
                 it.write(data)
+                it.close()
             }
         } else {
             val hostDevice = HostDeviceImpl(dispatcher, logger, socketFactory)
             coroutineScope.launch {
                 hostDevice.listenRemoteData().collect {
                     logger.log("$TAG HostDeviceImpl read data $it")
+                    incomingDataFlow.emit(it)
                 }
             }
         }
@@ -188,22 +191,52 @@ class CommunicationManagerImpl(
 
     fun discoverPeers() {
         logger.log("$TAG discoverPeers")
-        wifiP2pManager.discoverPeers(channel, object : WifiP2pManager.ActionListener {
-            override fun onSuccess() {
-                logger.log("$TAG discoverPeers onSuccess")
-                requestPeers()
+        coroutineScope.launch(dispatcher) {
+            while (devices.isEmpty()) {
+                discoverPeersCo()
+                requestPeersCo()
+                delay(500)
             }
+        }
+    }
 
-            override fun onFailure(code: Int) {
-                logger.log("$TAG discoverPeers onFailure. Error code: $code")
+    private suspend fun discoverPeersCo() {
+        suspendCoroutine<Any> { continuation ->
+            wifiP2pManager.discoverPeers(channel, object : WifiP2pManager.ActionListener {
+                override fun onSuccess() {
+                    continuation.resume(Unit)
+                }
+
+                override fun onFailure(code: Int) {
+                    logger.log("$TAG discoverPeers onFailure. Error code: $code")
+                    continuation.resume(Unit)
+                }
+            })
+        }
+    }
+
+    private suspend fun requestPeersCo() {
+        suspendCoroutine<Any> { continuation ->
+            logger.log("$TAG requestPeers")
+            //todo add synchronization
+            wifiP2pManager.requestPeers(channel) { wifiP2pDeviceList ->
+                logger.log("$TAG requestPeers wifiP2pDeviceList size:${wifiP2pDeviceList.deviceList.size}")
+                val clients =
+                    wifiP2pDeviceList.deviceList.filter { !it.deviceName.contains("samsung", true) }
+                        .map {
+                            logger.log("$TAG requestPeers DEVICE ${it.deviceName}")
+                            deviceFactory.create(it)
+                        }
+                if (devices.size != clients.size) {
+                    devices.clear()
+                    devices.addAll(clients)
+                }
+                continuation.resume(Unit)
             }
-        })
+        }
     }
 
     private fun requestPeers() {
-        val wifiManager = context.getSystemService(Context.WIFI_SERVICE) as WifiManager
-        wifiManager.scanResults
-
         logger.log("$TAG requestPeers")
         //todo add synchronization
         wifiP2pManager.requestPeers(channel) { wifiP2pDeviceList ->

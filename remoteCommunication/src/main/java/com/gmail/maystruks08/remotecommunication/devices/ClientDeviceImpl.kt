@@ -91,6 +91,7 @@ class ClientDeviceImpl(
         ClientImpl(socket, logger).also {
             client = it
             it.write(data)
+            it.close()
         }
     }
 
