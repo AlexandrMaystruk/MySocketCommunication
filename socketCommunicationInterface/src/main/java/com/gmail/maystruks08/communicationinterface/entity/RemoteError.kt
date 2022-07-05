@@ -16,7 +16,7 @@ sealed class RemoteError : Exception() {
 
     sealed class CommunicationError : RemoteError() {
         class ReadFromClientSocketError(override val message: String) : CommunicationError()
-
+        class WriteToClientSocketError(override val message: String) : CommunicationError()
     }
 
     class UnknownRemoteError : RemoteError()

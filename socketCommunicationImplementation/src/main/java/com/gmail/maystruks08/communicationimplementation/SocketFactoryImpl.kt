@@ -12,22 +12,23 @@ class SocketFactoryImpl(
 ) : SocketFactory {
 
     override fun create(config: SocketConfiguration): Socket {
-        runCatching {
-            val address = InetSocketAddress(config.ipAddress, config.inputPort)
-            logger.log("$TAG Start connect to: $address")
-            var attempt = 0
-            var error: Throwable? = null
-            while (attempt < 5) {
-                runCatching {
-                    return Socket().apply { connect(address, config.connectTimeout) }
-                }.getOrElse {
-                    attempt++
-                    val errorMessage = it.message ?: it.localizedMessage
-                    logger.log("$TAG attempt $attempt: Create socket exception: $errorMessage")
-                    if (attempt > 5) error = it
-                }
-            }
-            throw error ?: Exception("Create socket exception: Attempt $attempt")
+       return runCatching {
+           val address = InetSocketAddress(config.ipAddress, config.inputPort)
+           logger.log("$TAG Start connect to: $address")
+           var attempt = 0
+           val socket = Socket()
+           do {
+               runCatching {
+                   socket.bind(null)
+                   socket.connect(address, config.connectTimeout)
+               }.getOrElse {
+                   val errorMessage = it.message ?: it.localizedMessage
+                   logger.log("$TAG attempt $attempt: Create socket exception: $errorMessage")
+                   if (attempt >= 10) throw it
+                   attempt++
+               }
+           } while (!socket.isConnected && attempt < 10)
+           return@runCatching socket
         }.getOrElse {
             val errorMessage = it.message ?: it.localizedMessage
             logger.log("$TAG Create socket exception: $errorMessage")

@@ -5,14 +5,13 @@ import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.snapshots.SnapshotStateList
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -29,6 +28,7 @@ import com.google.accompanist.permissions.rememberPermissionState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
+@OptIn(ExperimentalPermissionsApi::class)
 class MainActivity : ComponentActivity() {
 
     private val logsList = mutableStateListOf<String>()
@@ -36,9 +36,9 @@ class MainActivity : ComponentActivity() {
 
     private val communicationManager: CommunicationManagerImpl by lazy {
         CommunicationManagerImpl(
-            this.applicationContext,
+            applicationContext,
+            lifecycleScope,
             Dispatchers.IO,
-            lifecycle,
             object : CommunicationLogger {
                 override fun log(message: String) {
                     Log.d("CommunicationLogger", message)
@@ -52,7 +52,6 @@ class MainActivity : ComponentActivity() {
             })
     }
 
-    @OptIn(ExperimentalPermissionsApi::class, ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
@@ -61,68 +60,7 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    val changeWiFiStatePermissionState =
-                        rememberPermissionState(permission.CHANGE_WIFI_STATE)
-                    val accessWiFiStatePermissionState =
-                        rememberPermissionState(permission.ACCESS_WIFI_STATE)
-                    val coarseLocationPermissionState =
-                        rememberPermissionState(permission.ACCESS_COARSE_LOCATION)
-                    val fineLocationPermissionState =
-                        rememberPermissionState(permission.ACCESS_FINE_LOCATION)
-
-                    when {
-                        coarseLocationPermissionState.hasPermission -> Log.d(
-                            "TAGG",
-                            "Call permission Granted coarseLocationPermissionState"
-                        )
-                        coarseLocationPermissionState.shouldShowRationale || !coarseLocationPermissionState.permissionRequested -> {
-                            LaunchedEffect(key1 = Unit, block = {
-                                coarseLocationPermissionState.launchPermissionRequest()
-                            })
-                        }
-                    }
-
-                    when {
-                        fineLocationPermissionState.hasPermission -> Log.d(
-                            "TAGG",
-                            "Call permission Granted fineLocationPermissionState"
-                        )
-                        fineLocationPermissionState.shouldShowRationale || !fineLocationPermissionState.permissionRequested -> {
-                            LaunchedEffect(key1 = Unit, block = {
-                                fineLocationPermissionState.launchPermissionRequest()
-                            })
-                        }
-                    }
-
-                    when {
-                        changeWiFiStatePermissionState.hasPermission -> Log.d(
-                            "TAGG",
-                            "Call permission Granted changeWiFiStatePermissionState"
-                        )
-                        changeWiFiStatePermissionState.shouldShowRationale || !changeWiFiStatePermissionState.permissionRequested -> {
-                            LaunchedEffect(key1 = Unit, block = {
-                                changeWiFiStatePermissionState.launchPermissionRequest()
-                            })
-                        }
-                    }
-
-                    when {
-                        accessWiFiStatePermissionState.hasPermission -> Log.d(
-                            "TAGG",
-                            "Call permission Granted accessWiFiStatePermissionState"
-                        )
-                        accessWiFiStatePermissionState.shouldShowRationale || !accessWiFiStatePermissionState.permissionRequested -> {
-                            LaunchedEffect(key1 = Unit, block = {
-                                accessWiFiStatePermissionState.launchPermissionRequest()
-                            })
-                        }
-                    }
-
-                    if (changeWiFiStatePermissionState.hasPermission && accessWiFiStatePermissionState.hasPermission) {
-                        LaunchedEffect(key1 = communicationManager, block = {
-                            communicationManager.onResume()
-                        })
-
+                    RequestPermissions {
                         val isShownChangeOrderStateDialog = remember { mutableStateOf(false) }
                         val broadcastData = remember { mutableStateOf("") }
                         LaunchedEffect(key1 = communicationManager, block = {
@@ -131,69 +69,176 @@ class MainActivity : ComponentActivity() {
                                 isShownChangeOrderStateDialog.value = true
                             }
                         })
-
-                        //show dialog
-                        if (isShownChangeOrderStateDialog.value) {
-                            AlertDialog(
-                                title = {
-                                    Text(text = "Received new message ")
-                                },
-                                text = {
-                                    Text(text = broadcastData.value)
-                                },
-                                onDismissRequest = { isShownChangeOrderStateDialog.value = false },
-                                confirmButton = {
-
-                                },
-                                dismissButton = {
-
-                                }
-                            )
-                        }
-
+                        ShowRemoteMessageDialog(isShownChangeOrderStateDialog, broadcastData)
                         Column {
-                            Button(onClick = ::getConnectedDevices) {
-                                Text("Get connected devices")
-                            }
-
-                            Button(onClick = ::sendDataToRemoteDevices) {
-                                Text("Send data to remote device")
-                            }
-
-                            Button(onClick = ::discoverPeers) {
-                                Text("discoverPeers")
-                            }
-                            val isChecked = remember {
-                                mutableStateOf(false)
-                            }
-                            Row {
-                                Text("Is sender")
-                                Checkbox(
-                                    checked = isChecked.value,
-                                    onCheckedChange = {
-                                        isChecked.value = it
-                                        communicationManager.setMode(it)
-                                    }
-                                )
-                            }
-
+                            val isSender = remember { mutableStateOf(false) }
                             val isTest = remember { mutableStateOf(false) }
-                            Row {
-                                Text("Test only Client-Server communication")
-                                Checkbox(
-                                    checked = isTest.value,
-                                    onCheckedChange = {
-                                        isTest.value = it
-                                        communicationManager.isTest = it
-                                    }
-                                )
-                            }
-
+                            FeatureFlags(isSender, isTest)
+                            ActionButtons(isSender, isTest)
                             LogsList(logsList)
                         }
                     }
                 }
             }
+        }
+    }
+
+    @Composable
+    fun ShowRemoteMessageDialog(
+        showDialog: MutableState<Boolean>,
+        broadcastData: MutableState<String>
+    ) {
+        //show dialog
+        if (showDialog.value) {
+            AlertDialog(
+                title = {
+                    Text(text = "Received new message ")
+                },
+                text = {
+                    Text(text = broadcastData.value)
+                },
+                onDismissRequest = { showDialog.value = false },
+                confirmButton = {
+
+                },
+                dismissButton = {
+
+                }
+            )
+        }
+    }
+
+    @OptIn(ExperimentalMaterial3Api::class)
+    @Composable
+    fun FeatureFlags(isSender: MutableState<Boolean>, isTest: MutableState<Boolean>) {
+        Row(modifier = Modifier.fillMaxWidth()) {
+            Spacer(modifier = Modifier.weight(0.3f))
+            Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                Text("Is sender")
+                Checkbox(
+                    checked = isSender.value,
+                    onCheckedChange = {
+                        isSender.value = it
+                        communicationManager.isSender = it
+                    }
+                )
+            }
+            Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                Text("Test only Client-Server communication")
+                Checkbox(
+                    checked = isTest.value,
+                    onCheckedChange = {
+                        isTest.value = it
+                        communicationManager.isTest = it
+                    }
+                )
+            }
+            Spacer(modifier = Modifier.weight(0.3f))
+        }
+    }
+
+    @Composable
+    fun ActionButtons(isSender: MutableState<Boolean>, isTest: MutableState<Boolean>) {
+        Button(modifier = Modifier.fillMaxWidth(), onClick = ::startWork) {
+            Text("startWork")
+        }
+
+        Button(
+            modifier = Modifier.fillMaxWidth(),
+            onClick = ::discoverPeers
+        ) {
+            Text("Discover Peers")
+        }
+
+        Button(
+            modifier = Modifier.fillMaxWidth(),
+            onClick = ::getAllIpsInLocaleNetwork
+        ) {
+            Text("Get All Ips In Locale Network")
+        }
+
+        val buttonText = if (isTest.value && !isSender.value) {
+            "Start server"
+        } else {
+            "Send data to remote device"
+        }
+        Button(
+            modifier = Modifier.fillMaxWidth(),
+            onClick = ::sendDataToRemoteDevices
+        ) {
+            Text(buttonText)
+        }
+
+        Button(modifier = Modifier.fillMaxWidth(), onClick = ::stopWork) {
+            Text("stopWork")
+        }
+    }
+
+    @Composable
+    fun RequestPermissions(onPermissionsGranted: @Composable () -> Unit) {
+        val changeWiFiStatePermissionState =
+            rememberPermissionState(permission.CHANGE_WIFI_STATE)
+        val accessWiFiStatePermissionState =
+            rememberPermissionState(permission.ACCESS_WIFI_STATE)
+        val coarseLocationPermissionState =
+            rememberPermissionState(permission.ACCESS_COARSE_LOCATION)
+        val fineLocationPermissionState =
+            rememberPermissionState(permission.ACCESS_FINE_LOCATION)
+
+        when {
+            coarseLocationPermissionState.hasPermission -> Log.d(
+                "TAGG",
+                "Coarse Location permission Granted"
+            )
+            coarseLocationPermissionState.shouldShowRationale || !coarseLocationPermissionState.permissionRequested -> {
+                LaunchedEffect(key1 = Unit, block = {
+                    coarseLocationPermissionState.launchPermissionRequest()
+                })
+            }
+        }
+
+        when {
+            fineLocationPermissionState.hasPermission -> Log.d(
+                "TAGG",
+                "Fine Location permission Grante"
+            )
+            fineLocationPermissionState.shouldShowRationale || !fineLocationPermissionState.permissionRequested -> {
+                LaunchedEffect(key1 = Unit, block = {
+                    fineLocationPermissionState.launchPermissionRequest()
+                })
+            }
+        }
+
+        when {
+            changeWiFiStatePermissionState.hasPermission -> Log.d(
+                "TAGG",
+                "Change WiFi State permission Granted"
+            )
+            changeWiFiStatePermissionState.shouldShowRationale || !changeWiFiStatePermissionState.permissionRequested -> {
+                LaunchedEffect(key1 = Unit, block = {
+                    changeWiFiStatePermissionState.launchPermissionRequest()
+                })
+            }
+        }
+
+        when {
+            accessWiFiStatePermissionState.hasPermission -> Log.d(
+                "TAGG",
+                "access WiFi state permission Granted"
+            )
+            accessWiFiStatePermissionState.shouldShowRationale || !accessWiFiStatePermissionState.permissionRequested -> {
+                LaunchedEffect(key1 = Unit, block = {
+                    accessWiFiStatePermissionState.launchPermissionRequest()
+                })
+            }
+        }
+
+        if (coarseLocationPermissionState.hasPermission &&
+            fineLocationPermissionState.hasPermission &&
+            changeWiFiStatePermissionState.hasPermission &&
+            accessWiFiStatePermissionState.hasPermission
+        ) {
+            onPermissionsGranted.invoke()
         }
     }
 
@@ -222,18 +267,27 @@ class MainActivity : ComponentActivity() {
 
     override fun onStop() {
         super.onStop()
-        communicationManager.onPause()
+        communicationManager.onStop()
+    }
+
+    private fun startWork() {
+        communicationManager.onStart()
+    }
+
+    private fun getAllIpsInLocaleNetwork() {
+        lifecycleScope.launch(Dispatchers.IO) {
+            communicationManager.getAllIpsInLocaleNetwork()
+        }
     }
 
     private fun discoverPeers() {
-        communicationManager.discoverPeers()
+        lifecycleScope.launch(Dispatchers.IO) {
+            communicationManager.discoverPeers()
+        }
     }
 
-    private fun getConnectedDevices() {
-        lifecycleScope.launch(Dispatchers.IO) {
-            communicationManager.getAllIpsInLocaleNetwork()
-//            communicationManager.getConnectedDevices()
-        }
+    private fun stopWork() {
+        communicationManager.onStop()
     }
 
     private fun sendDataToRemoteDevices() {

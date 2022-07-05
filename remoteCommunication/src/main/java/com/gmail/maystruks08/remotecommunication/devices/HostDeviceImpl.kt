@@ -7,6 +7,7 @@ import com.gmail.maystruks08.communicationinterface.SocketFactory
 import com.gmail.maystruks08.communicationinterface.entity.TransferData
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.*
 import kotlinx.coroutines.flow.Flow
@@ -15,6 +16,7 @@ import kotlinx.coroutines.flow.flowOn
 import java.io.Closeable
 
 class HostDeviceImpl(
+    private val coroutineScope: CoroutineScope,
     private val dispatcher: CoroutineDispatcher,
     private val logger: CommunicationLogger,
     private val socketFactory: SocketFactory
@@ -23,7 +25,8 @@ class HostDeviceImpl(
     private var server: Server? = null
 
     override fun listenRemoteData(): Flow<TransferData> {
-        val server = ServerImpl(socketFactory, logger).also { server = it }
+        close()
+        val server = ServerImpl(socketFactory, logger, dispatcher, coroutineScope).also { server = it }
         return callbackFlow {
             runCatching {
                 server.readFromClients { transferData ->

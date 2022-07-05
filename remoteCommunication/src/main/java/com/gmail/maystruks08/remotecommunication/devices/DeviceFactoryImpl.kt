@@ -1,18 +1,13 @@
 package com.gmail.maystruks08.remotecommunication.devices
 
-import android.annotation.SuppressLint
-import android.content.Context
-import android.net.wifi.p2p.WifiP2pDevice
-import android.net.wifi.p2p.WifiP2pManager
 import com.gmail.maystruks08.communicationimplementation.SocketFactoryImpl
 import com.gmail.maystruks08.communicationinterface.CommunicationLogger
 import com.gmail.maystruks08.communicationinterface.SocketFactory
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
 
 class DeviceFactoryImpl(
-    private val context: Context,
-    private val wifiP2pManager: WifiP2pManager,
-    private val channel: WifiP2pManager.Channel,
+    private val coroutineScope: CoroutineScope,
     private val dispatcher: CoroutineDispatcher,
     private val logger: CommunicationLogger
 ) : DeviceFactory {
@@ -21,17 +16,16 @@ class DeviceFactoryImpl(
         SocketFactoryImpl(logger)
     }
 
-    @SuppressLint("MissingPermission")
-    override fun create(device: WifiP2pDevice): ClientDevice {
+
+    override fun createClient(): ClientDevice {
         return ClientDeviceImpl(
-            deviceMacAddress = device.deviceAddress,
-            wifiP2pManager = wifiP2pManager,
-            channel = channel,
             socketFactory = socketFactory,
-            dispatcher = dispatcher,
-            logger = logger,
-            context = context
+            logger = logger
         )
+    }
+
+    override fun createHost(): HostDevice {
+        return HostDeviceImpl(coroutineScope, dispatcher, logger, socketFactory)
     }
 
 }

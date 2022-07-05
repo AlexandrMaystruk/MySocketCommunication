@@ -35,37 +35,31 @@ class ClientImpl(
         return runCatching {
             reader?.readObject() as TransferData
         }.getOrElse {
-            throw RemoteError.CommunicationError.ReadFromClientSocketError(
-                it.message ?: it.localizedMessage
-            )
+            throw RemoteError.CommunicationError.ReadFromClientSocketError(it.message ?: it.localizedMessage)
         }
     }
 
     @Suppress("BlockingMethodInNonBlockingContext")
     override fun write(data: TransferData) {
-        try {
+        runCatching {
             if (client.isOutputShutdown) throw RuntimeException("output stream shutdown")
-            if (writer == null) throw RuntimeException("Writer is null")
+            if (writer == null) throw RuntimeException("writer is null")
             writer?.writeObject(data)
             writer?.flush()
             logger.log("write message finish")
-        } catch (e: Exception) {
-            logger.log("write message to device error ${e.localizedMessage};")
+        }.onFailure {
+            throw RemoteError.CommunicationError.WriteToClientSocketError(it.localizedMessage)
         }
     }
 
     override fun close() {
-        try {
+        runCatching {
             if (!client.isInputShutdown) client.shutdownInput()
             if (!client.isOutputShutdown) client.shutdownOutput()
             if (!client.isClosed) client.close()
-            logger.log("${client.inetAddress?.hostAddress} closed the connection")
-        } catch (e: NullPointerException) {
-            logger.log("closed the connection error, null pointer exception")
-        } catch (e: Exception) {
-            logger.log("closed the connection error")
-        } catch (t: Throwable) {
-            logger.log("closed the connection error ${t.localizedMessage} ")
+            logger.log("closed the connection to: ${client.inetAddress?.hostAddress}")
+        }.onFailure {
+            logger.log("closed the connection error ${it.localizedMessage}")
         }
     }
 

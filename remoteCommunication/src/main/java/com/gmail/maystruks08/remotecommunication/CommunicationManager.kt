@@ -9,9 +9,9 @@ interface CommunicationManager {
     /**
      * Lifecycle fun, used for init component
      */
-    fun onResume()
+    fun onStart()
 
-    fun setMode(isSender: Boolean)
+    suspend fun discoverPeers()
 
     /**
      * Data which we send to remote devices
@@ -26,6 +26,6 @@ interface CommunicationManager {
     /**
      * Lifecycle fun, used to stop using component
      */
-    fun onPause()
+    fun onStop()
 
 }
