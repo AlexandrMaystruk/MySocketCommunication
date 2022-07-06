@@ -27,8 +27,10 @@ class ServerImpl(
 
     override fun readFromClients(onNewDataReceived: (TransferData) -> Unit) {
         runCatching {
-            logger.log("Start creation server")
-            val socket = factory.createServerSocket().also { serverSocket = it }
+            logger.log("Start creation server on port $LOCAL_SERVER_PORT")
+            val socket = factory.createServerSocket(LOCAL_SERVER_PORT).also {
+                serverSocket = it
+            }
             while (!socket.isClosed) {
                 val client: Client = ClientImpl(
                     client = socket.accept(),
@@ -74,5 +76,9 @@ class ServerImpl(
 
             mutex.withLock { clients.remove(client) }
         }
+    }
+
+    companion object{
+        const val LOCAL_SERVER_PORT = 8080
     }
 }

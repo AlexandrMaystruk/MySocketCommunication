@@ -13,23 +13,18 @@
     <option name="autoReloadType" value="NONE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="f197d2af-136a-4841-95bc-d93bb1ff04a8" name="Changes" comment="Fixed logs">
-      <change afterPath="$PROJECT_DIR$/remoteCommunication/src/main/java/com/gmail/maystruks08/remotecommunication/P2pBroadcastCommand.kt" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/remoteCommunication/src/main/java/com/gmail/maystruks08/remotecommunication/P2pManagerImpl.kt" afterDir="false" />
+    <list default="true" id="f197d2af-136a-4841-95bc-d93bb1ff04a8" name="Changes" comment="Fixed UI and error handling">
+      <change afterPath="$PROJECT_DIR$/remoteCommunication/src/main/java/com/gmail/maystruks08/remotecommunication/NsdManagerImpl.kt" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/remoteCommunication/src/main/java/com/gmail/maystruks08/remotecommunication/Utils.kt" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/app/src/main/java/com/gmail/maystruks08/socketcommunication/MainActivity.kt" beforeDir="false" afterPath="$PROJECT_DIR$/app/src/main/java/com/gmail/maystruks08/socketcommunication/MainActivity.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/remoteCommunication/src/main/java/com/gmail/maystruks08/remotecommunication/CommunicationManager.kt" beforeDir="false" afterPath="$PROJECT_DIR$/remoteCommunication/src/main/java/com/gmail/maystruks08/remotecommunication/CommunicationManager.kt" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/remoteCommunication/src/main/java/com/gmail/maystruks08/remotecommunication/CommunicationManagerImpl.kt" beforeDir="false" afterPath="$PROJECT_DIR$/remoteCommunication/src/main/java/com/gmail/maystruks08/remotecommunication/CommunicationManagerImpl.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/remoteCommunication/src/main/java/com/gmail/maystruks08/remotecommunication/devices/ClientDevice.kt" beforeDir="false" afterPath="$PROJECT_DIR$/remoteCommunication/src/main/java/com/gmail/maystruks08/remotecommunication/devices/ClientDevice.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/remoteCommunication/src/main/java/com/gmail/maystruks08/remotecommunication/P2pBroadcastCommand.kt" beforeDir="false" afterPath="$PROJECT_DIR$/remoteCommunication/src/main/java/com/gmail/maystruks08/remotecommunication/P2pBroadcastCommand.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/remoteCommunication/src/main/java/com/gmail/maystruks08/remotecommunication/P2pManagerImpl.kt" beforeDir="false" afterPath="$PROJECT_DIR$/remoteCommunication/src/main/java/com/gmail/maystruks08/remotecommunication/P2pManagerImpl.kt" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/remoteCommunication/src/main/java/com/gmail/maystruks08/remotecommunication/devices/ClientDeviceImpl.kt" beforeDir="false" afterPath="$PROJECT_DIR$/remoteCommunication/src/main/java/com/gmail/maystruks08/remotecommunication/devices/ClientDeviceImpl.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/remoteCommunication/src/main/java/com/gmail/maystruks08/remotecommunication/devices/DeviceFactory.kt" beforeDir="false" afterPath="$PROJECT_DIR$/remoteCommunication/src/main/java/com/gmail/maystruks08/remotecommunication/devices/DeviceFactory.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/remoteCommunication/src/main/java/com/gmail/maystruks08/remotecommunication/devices/DeviceFactoryImpl.kt" beforeDir="false" afterPath="$PROJECT_DIR$/remoteCommunication/src/main/java/com/gmail/maystruks08/remotecommunication/devices/DeviceFactoryImpl.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/remoteCommunication/src/main/java/com/gmail/maystruks08/remotecommunication/devices/HostDeviceImpl.kt" beforeDir="false" afterPath="$PROJECT_DIR$/remoteCommunication/src/main/java/com/gmail/maystruks08/remotecommunication/devices/HostDeviceImpl.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/socketCommunicationImplementation/src/main/java/com/gmail/maystruks08/communicationimplementation/ClientImpl.kt" beforeDir="false" afterPath="$PROJECT_DIR$/socketCommunicationImplementation/src/main/java/com/gmail/maystruks08/communicationimplementation/ClientImpl.kt" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/socketCommunicationImplementation/src/main/java/com/gmail/maystruks08/communicationimplementation/ServerImpl.kt" beforeDir="false" afterPath="$PROJECT_DIR$/socketCommunicationImplementation/src/main/java/com/gmail/maystruks08/communicationimplementation/ServerImpl.kt" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/socketCommunicationImplementation/src/main/java/com/gmail/maystruks08/communicationimplementation/SocketFactoryImpl.kt" beforeDir="false" afterPath="$PROJECT_DIR$/socketCommunicationImplementation/src/main/java/com/gmail/maystruks08/communicationimplementation/SocketFactoryImpl.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/socketCommunicationInterface/src/main/java/com/gmail/maystruks08/communicationinterface/Client.kt" beforeDir="false" afterPath="$PROJECT_DIR$/socketCommunicationInterface/src/main/java/com/gmail/maystruks08/communicationinterface/Client.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/socketCommunicationInterface/src/main/java/com/gmail/maystruks08/communicationinterface/entity/RemoteError.kt" beforeDir="false" afterPath="$PROJECT_DIR$/socketCommunicationInterface/src/main/java/com/gmail/maystruks08/communicationinterface/entity/RemoteError.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/socketCommunicationInterface/src/main/java/com/gmail/maystruks08/communicationinterface/SocketFactory.kt" beforeDir="false" afterPath="$PROJECT_DIR$/socketCommunicationInterface/src/main/java/com/gmail/maystruks08/communicationinterface/SocketFactory.kt" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -65,6 +60,7 @@
         <option value="Kotlin Data Class" />
         <option value="Kotlin Interface" />
         <option value="Kotlin Class" />
+        <option value="Kotlin File" />
       </list>
     </option>
   </component>
@@ -172,19 +168,6 @@
         <option name="Android.Gradle.BeforeRunTask" enabled="true" />
       </method>
     </configuration>
-    <configuration default="true" type="JetRunConfigurationType">
-      <module name="SocketCommunication" />
-      <method v="2">
-        <option name="Make" enabled="true" />
-      </method>
-    </configuration>
-    <configuration default="true" type="KotlinStandaloneScriptRunConfigurationType">
-      <module name="SocketCommunication" />
-      <option name="filePath" />
-      <method v="2">
-        <option name="Make" enabled="true" />
-      </method>
-    </configuration>
   </component>
   <component name="SpellCheckerSettings" RuntimeDictionaries="0" Folders="0" CustomDictionaries="0" DefaultDictionary="application-level" UseSingleDictionary="true" transferred="true" />
   <component name="TaskManager">
@@ -249,20 +232,6 @@
     <option name="LAST_COMMIT_MESSAGE" value="Fixed logs" />
   </component>
   <component name="XDebuggerManager">
-    <breakpoint-manager>
-      <breakpoints>
-        <line-breakpoint enabled="true" suspend="THREAD" type="kotlin-line">
-          <url>file://$PROJECT_DIR$/remoteCommunication/src/main/java/com/gmail/maystruks08/remotecommunication/CommunicationManagerImpl.kt</url>
-          <line>81</line>
-          <option name="timeStamp" value="124" />
-        </line-breakpoint>
-        <line-breakpoint enabled="true" suspend="THREAD" type="kotlin-line">
-          <url>file://$PROJECT_DIR$/remoteCommunication/src/main/java/com/gmail/maystruks08/remotecommunication/CommunicationManagerImpl.kt</url>
-          <line>91</line>
-          <option name="timeStamp" value="127" />
-        </line-breakpoint>
-      </breakpoints>
-    </breakpoint-manager>
     <watches-manager>
       <configuration name="app">
         <watch expression="this.getSystemService(Context.WIFI_P2P_SERVICE) as WifiP2pManager" language="kotlin" />

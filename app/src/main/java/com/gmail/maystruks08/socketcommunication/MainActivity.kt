@@ -41,7 +41,7 @@ class MainActivity : ComponentActivity() {
             Dispatchers.IO,
             object : CommunicationLogger {
                 override fun log(message: String) {
-                    Log.d("CommunicationLogger", message)
+                    Log.d("Logger", message)
                     logsList.add(message)
                 }
 
@@ -139,15 +139,22 @@ class MainActivity : ComponentActivity() {
 
     @Composable
     fun ActionButtons(isSender: MutableState<Boolean>, isTest: MutableState<Boolean>) {
-        Button(modifier = Modifier.fillMaxWidth(), onClick = ::startWork) {
-            Text("startWork")
+        Button(
+            modifier = Modifier.fillMaxWidth(),
+            onClick = {
+                communicationManager.onStart()
+            }
+        ) {
+            Text("startWork P2p")
         }
 
         Button(
             modifier = Modifier.fillMaxWidth(),
-            onClick = ::discoverPeers
+            onClick = {
+                lifecycleScope.launch(Dispatchers.IO) { communicationManager.discoverPeers() }
+            }
         ) {
-            Text("Discover Peers")
+            Text("discoverPeers")
         }
 
         Button(
@@ -169,8 +176,58 @@ class MainActivity : ComponentActivity() {
             Text(buttonText)
         }
 
-        Button(modifier = Modifier.fillMaxWidth(), onClick = ::stopWork) {
-            Text("stopWork")
+        Button(
+            modifier = Modifier.fillMaxWidth(),
+            onClick = {
+                communicationManager.onStop()
+            }
+        ) {
+            Text("stopWork P2p")
+        }
+
+        Button(
+            modifier = Modifier.fillMaxWidth(),
+            onClick = {
+                communicationManager.nsdManagerOnStart()
+            }
+        ) {
+            Text("nsdManagerOnStart")
+        }
+
+        Button(
+            modifier = Modifier.fillMaxWidth(),
+            onClick = {
+                communicationManager.discoverNdsServices()
+            }
+        ) {
+            Text("discoverNdsServices")
+        }
+
+        Button(
+            modifier = Modifier.fillMaxWidth(),
+            onClick = {
+                communicationManager.registerDnsService()
+            }
+        ) {
+            Text("registerDnsService")
+        }
+
+        Button(
+            modifier = Modifier.fillMaxWidth(),
+            onClick = {
+                communicationManager.discoverDnsService()
+            }
+        ) {
+            Text("discoverDnsService")
+        }
+
+        Button(
+            modifier = Modifier.fillMaxWidth(),
+            onClick = {
+                communicationManager.nsdManagerOnStop()
+            }
+        ) {
+            Text("nsdManagerOnStop")
         }
     }
 
@@ -270,24 +327,10 @@ class MainActivity : ComponentActivity() {
         communicationManager.onStop()
     }
 
-    private fun startWork() {
-        communicationManager.onStart()
-    }
-
     private fun getAllIpsInLocaleNetwork() {
         lifecycleScope.launch(Dispatchers.IO) {
             communicationManager.getAllIpsInLocaleNetwork()
         }
-    }
-
-    private fun discoverPeers() {
-        lifecycleScope.launch(Dispatchers.IO) {
-            communicationManager.discoverPeers()
-        }
-    }
-
-    private fun stopWork() {
-        communicationManager.onStop()
     }
 
     private fun sendDataToRemoteDevices() {
@@ -302,7 +345,7 @@ class MainActivity : ComponentActivity() {
                 messageCount++
 
             }.getOrElse {
-                Log.d("CommunicationLogger", "sendDataToRemoteDevices error $it")
+                Log.d("Logger", "sendDataToRemoteDevices error $it")
             }
         }
     }
