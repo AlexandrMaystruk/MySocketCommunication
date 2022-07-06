@@ -22,6 +22,8 @@ import androidx.lifecycle.lifecycleScope
 import com.gmail.maystruks08.communicationinterface.CommunicationLogger
 import com.gmail.maystruks08.communicationinterface.entity.TransferData
 import com.gmail.maystruks08.remotecommunication.CommunicationManagerImpl
+import com.gmail.maystruks08.remotecommunication.getAllIpsInLocaleNetwork
+import com.gmail.maystruks08.remotecommunication.getLocalIpAddress
 import com.gmail.maystruks08.socketcommunication.ui.theme.SocketCommunicationTheme
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.rememberPermissionState
@@ -34,22 +36,25 @@ class MainActivity : ComponentActivity() {
     private val logsList = mutableStateListOf<String>()
     var messageCount = 0
 
+    private val logger = object : CommunicationLogger {
+        override fun log(message: String) {
+            Log.d("Logger", message)
+            logsList.add(message)
+        }
+
+        override fun logError(exception: Exception, message: String) {
+            Log.e("CommunicationLogger", message, exception)
+            logsList.add(message)
+        }
+    }
+
     private val communicationManager: CommunicationManagerImpl by lazy {
         CommunicationManagerImpl(
             applicationContext,
             lifecycleScope,
             Dispatchers.IO,
-            object : CommunicationLogger {
-                override fun log(message: String) {
-                    Log.d("Logger", message)
-                    logsList.add(message)
-                }
-
-                override fun logError(exception: Exception, message: String) {
-                    Log.e("CommunicationLogger", message, exception)
-                    logsList.add(message)
-                }
-            })
+            logger
+        )
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -150,16 +155,7 @@ class MainActivity : ComponentActivity() {
 
         Button(
             modifier = Modifier.fillMaxWidth(),
-            onClick = {
-                lifecycleScope.launch(Dispatchers.IO) { communicationManager.discoverPeers() }
-            }
-        ) {
-            Text("discoverPeers")
-        }
-
-        Button(
-            modifier = Modifier.fillMaxWidth(),
-            onClick = ::getAllIpsInLocaleNetwork
+            onClick = ::findAllIpsInLocaleNetwork
         ) {
             Text("Get All Ips In Locale Network")
         }
@@ -327,9 +323,10 @@ class MainActivity : ComponentActivity() {
         communicationManager.onStop()
     }
 
-    private fun getAllIpsInLocaleNetwork() {
+    private fun findAllIpsInLocaleNetwork() {
         lifecycleScope.launch(Dispatchers.IO) {
-            communicationManager.getAllIpsInLocaleNetwork()
+            val localeIp = getLocalIpAddress(logger) ?: return@launch
+            getAllIpsInLocaleNetwork(localeIp)
         }
     }
 

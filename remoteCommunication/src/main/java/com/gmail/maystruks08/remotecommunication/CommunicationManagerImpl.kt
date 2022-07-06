@@ -11,10 +11,13 @@ import com.gmail.maystruks08.communicationinterface.entity.SocketConfiguration
 import com.gmail.maystruks08.communicationinterface.entity.TransferData
 import com.gmail.maystruks08.remotecommunication.devices.DeviceFactory
 import com.gmail.maystruks08.remotecommunication.devices.DeviceFactoryImpl
+import com.gmail.maystruks08.remotecommunication.managers.NsdControllerImpl
+import com.gmail.maystruks08.remotecommunication.managers.NsdServiceCommand
+import com.gmail.maystruks08.remotecommunication.managers.P2pBroadcastCommand
+import com.gmail.maystruks08.remotecommunication.managers.P2pControllerImpl
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
-import java.net.InetAddress
 
 @SuppressLint("MissingPermission")
 class CommunicationManagerImpl(
@@ -30,8 +33,8 @@ class CommunicationManagerImpl(
     var nsdServiceInfo: NsdServiceInfo? = null
 
     private val _incomingDataFlow = MutableSharedFlow<TransferData>()
-    private val _p2pManager by lazy { P2pManagerImpl(context, coroutineScope, dispatcher, logger) }
-    private val _nsdManager by lazy { NsdManagerImpl(context, coroutineScope, dispatcher, logger) }
+    private val _p2pManager by lazy { P2pControllerImpl(context, coroutineScope, dispatcher, logger) }
+    private val _nsdManager by lazy { NsdControllerImpl(context, coroutineScope, dispatcher, logger) }
     private val _deviceFactory: DeviceFactory by lazy {
         DeviceFactoryImpl(
             coroutineScope,
@@ -48,7 +51,7 @@ class CommunicationManagerImpl(
     override fun onStart() {
         logger.log("$TAG onResume")
         _p2pManager.startWork()
-        coroutineScope.launch {
+        coroutineScope.launch(dispatcher) {
             _p2pManager.p2pBroadcastCommandFlow.collect { p2pBroadcastCommand ->
                 logger.log("$TAG command: ${p2pBroadcastCommand.javaClass.simpleName}")
                 when (p2pBroadcastCommand) {
@@ -68,10 +71,6 @@ class CommunicationManagerImpl(
                 }
             }
         }
-    }
-
-    override suspend fun discoverPeers() {
-        _p2pManager.getWifiP2pDevices()
     }
 
     fun nsdManagerOnStart() {
@@ -153,36 +152,6 @@ class CommunicationManagerImpl(
     override fun onStop() {
         logger.log("$TAG onPause")
         _p2pManager.stopWork()
-    }
-
-
-    //todo move this to socket factory
-    /**
-     * This method get local ip and thy to ping in parallel all ips in network
-     * This is a resource-intensive call, need to avoid often using this method!
-     */
-    @Suppress("BlockingMethodInNonBlockingContext")
-    suspend fun getAllIpsInLocaleNetwork(): List<InetAddress> {
-        return withContext(Dispatchers.IO) {
-            val listOfIpAddressesInLocalNetwork = mutableListOf<InetAddress>()
-            val ipString = getLocalIpAddress(logger).orEmpty()
-            val prefix = ipString.substring(0, ipString.lastIndexOf(".") + 1)
-            val deferredList = mutableListOf<Deferred<Any>>()
-            for (i in 0..254) {
-                deferredList.add(
-                    async {
-                        val testIp = "$prefix$i"
-                        val inetAddress = InetAddress.getByName(testIp)
-                        if (inetAddress.isReachable(300)) {
-                            logger.log("testIp: $testIp isReachable = true")
-                            listOfIpAddressesInLocalNetwork.add(inetAddress)
-                        }
-                    }
-                )
-            }
-            deferredList.awaitAll()
-            return@withContext listOfIpAddressesInLocalNetwork
-        }
     }
 
     private suspend fun testCommunication(data: TransferData) {

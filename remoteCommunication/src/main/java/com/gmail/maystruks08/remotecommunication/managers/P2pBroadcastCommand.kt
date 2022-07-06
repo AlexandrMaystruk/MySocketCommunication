@@ -1,4 +1,4 @@
-package com.gmail.maystruks08.remotecommunication
+package com.gmail.maystruks08.remotecommunication.managers
 
 import android.net.nsd.NsdServiceInfo
 import android.net.wifi.p2p.WifiP2pDevice

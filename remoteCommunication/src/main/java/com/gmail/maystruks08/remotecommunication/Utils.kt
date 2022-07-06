@@ -1,15 +1,35 @@
 package com.gmail.maystruks08.remotecommunication
 
 import com.gmail.maystruks08.communicationinterface.CommunicationLogger
-import java.net.Inet4Address
-import java.net.NetworkInterface
-import java.net.ServerSocket
-import java.net.SocketException
+import kotlinx.coroutines.*
+import java.net.*
 
 
-//fun getFreePort(): Int = ServerSocket(0).use {
-//    return@use it.localPort
-//}
+/**
+ * This method get local ip and thy to ping in parallel all ips in network
+ * This is a resource-intensive call, need to avoid often using this method!
+ */
+@Suppress("BlockingMethodInNonBlockingContext")
+suspend fun getAllIpsInLocaleNetwork(localeIp: String): List<InetAddress> {
+    return withContext(Dispatchers.IO) {
+        val listOfIpAddressesInLocalNetwork = mutableListOf<InetAddress>()
+        val prefix = localeIp.substring(0, localeIp.lastIndexOf(".") + 1)
+        val deferredList = mutableListOf<Deferred<Any>>()
+        for (i in 0..254) {
+            deferredList.add(
+                async {
+                    val testIp = "$prefix$i"
+                    val inetAddress = InetAddress.getByName(testIp)
+                    if (inetAddress.isReachable(300)) {
+                        listOfIpAddressesInLocalNetwork.add(inetAddress)
+                    }
+                }
+            )
+        }
+        deferredList.awaitAll()
+        return@withContext listOfIpAddressesInLocalNetwork
+    }
+}
 
 fun getLocalIpAddress(logger: CommunicationLogger): String? {
     try {

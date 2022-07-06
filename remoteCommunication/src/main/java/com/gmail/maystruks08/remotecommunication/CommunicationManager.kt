@@ -11,8 +11,6 @@ interface CommunicationManager {
      */
     fun onStart()
 
-    suspend fun discoverPeers()
-
     /**
      * Data which we send to remote devices
      */

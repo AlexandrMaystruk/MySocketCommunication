@@ -1,4 +1,4 @@
-package com.gmail.maystruks08.remotecommunication
+package com.gmail.maystruks08.remotecommunication.managers
 
 import android.annotation.SuppressLint
 import android.content.Context
@@ -16,7 +16,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 
 @SuppressLint("MissingPermission")
-class NsdManagerImpl(
+class NsdControllerImpl(
     private val context: Context,
     private val coroutineScope: CoroutineScope,
     private val dispatcher: CoroutineDispatcher = Dispatchers.IO,
@@ -110,7 +110,11 @@ class NsdManagerImpl(
                     return
                 }
                 _serviceInfo = serviceInfo
-                producerScope.trySendBlocking(NsdServiceCommand.ReceivedRemoteConnectionInfo(serviceInfo))
+                producerScope.trySendBlocking(
+                    NsdServiceCommand.ReceivedRemoteConnectionInfo(
+                        serviceInfo
+                    )
+                )
             }
         }
 

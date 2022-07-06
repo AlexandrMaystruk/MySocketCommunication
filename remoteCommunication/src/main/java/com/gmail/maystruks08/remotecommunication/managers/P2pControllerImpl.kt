@@ -1,4 +1,4 @@
-package com.gmail.maystruks08.remotecommunication
+package com.gmail.maystruks08.remotecommunication.managers
 
 import android.annotation.SuppressLint
 import android.content.BroadcastReceiver
@@ -16,8 +16,9 @@ import android.os.Looper
 import com.gmail.maystruks08.communicationimplementation.ServerImpl.Companion.LOCAL_SERVER_PORT
 import com.gmail.maystruks08.communicationinterface.CommunicationLogger
 import com.gmail.maystruks08.communicationinterface.entity.RemoteError
-import com.gmail.maystruks08.remotecommunication.NsdManagerImpl.Companion.SERVICE_NAME
-import com.gmail.maystruks08.remotecommunication.NsdManagerImpl.Companion.SERVICE_TYPE
+import com.gmail.maystruks08.remotecommunication.getLocalIpAddress
+import com.gmail.maystruks08.remotecommunication.managers.NsdControllerImpl.Companion.SERVICE_NAME
+import com.gmail.maystruks08.remotecommunication.managers.NsdControllerImpl.Companion.SERVICE_TYPE
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -28,7 +29,7 @@ import kotlin.coroutines.resumeWithException
 import kotlin.coroutines.suspendCoroutine
 
 @SuppressLint("MissingPermission")
-class P2pManagerImpl(
+class P2pControllerImpl(
     private val context: Context,
     private val coroutineScope: CoroutineScope,
     private val dispatcher: CoroutineDispatcher = Dispatchers.IO,
