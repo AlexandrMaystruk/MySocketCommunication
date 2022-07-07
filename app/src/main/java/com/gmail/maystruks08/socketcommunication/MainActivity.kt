@@ -21,7 +21,10 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.lifecycleScope
 import com.gmail.maystruks08.communicationinterface.CommunicationLogger
 import com.gmail.maystruks08.communicationinterface.entity.TransferData
+import com.gmail.maystruks08.remotecommunication.CommunicationManager
 import com.gmail.maystruks08.remotecommunication.CommunicationManagerImpl
+import com.gmail.maystruks08.remotecommunication.getAllIpsInLocaleNetwork
+import com.gmail.maystruks08.remotecommunication.getLocalIpAddress
 import com.gmail.maystruks08.socketcommunication.ui.theme.SocketCommunicationTheme
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.rememberPermissionState
@@ -34,22 +37,25 @@ class MainActivity : ComponentActivity() {
     private val logsList = mutableStateListOf<String>()
     var messageCount = 0
 
-    private val communicationManager: CommunicationManagerImpl by lazy {
+    private val logger = object : CommunicationLogger {
+        override fun log(message: String) {
+            Log.d("Logger", message)
+            logsList.add(message)
+        }
+
+        override fun logError(exception: Exception, message: String) {
+            Log.e("Logger", message, exception)
+            logsList.add(message)
+        }
+    }
+
+    private val communicationManager: CommunicationManager by lazy {
         CommunicationManagerImpl(
             applicationContext,
             lifecycleScope,
             Dispatchers.IO,
-            object : CommunicationLogger {
-                override fun log(message: String) {
-                    Log.d("CommunicationLogger", message)
-                    logsList.add(message)
-                }
-
-                override fun logError(exception: Exception, message: String) {
-                    Log.e("CommunicationLogger", message, exception)
-                    logsList.add(message)
-                }
-            })
+            logger
+        )
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -64,7 +70,7 @@ class MainActivity : ComponentActivity() {
                         val isShownChangeOrderStateDialog = remember { mutableStateOf(false) }
                         val broadcastData = remember { mutableStateOf("") }
                         LaunchedEffect(key1 = communicationManager, block = {
-                            communicationManager.observeBroadcast().collect {
+                            communicationManager.getRemoteClientsTransferDataFlow().collect {
                                 broadcastData.value = it.toString()
                                 isShownChangeOrderStateDialog.value = true
                             }
@@ -119,7 +125,7 @@ class MainActivity : ComponentActivity() {
                     checked = isSender.value,
                     onCheckedChange = {
                         isSender.value = it
-                        communicationManager.isSender = it
+                        (communicationManager as CommunicationManagerImpl).isSender = it
                     }
                 )
             }
@@ -129,7 +135,7 @@ class MainActivity : ComponentActivity() {
                     checked = isTest.value,
                     onCheckedChange = {
                         isTest.value = it
-                        communicationManager.isTest = it
+                        (communicationManager as CommunicationManagerImpl).isTest = it
                     }
                 )
             }
@@ -139,20 +145,18 @@ class MainActivity : ComponentActivity() {
 
     @Composable
     fun ActionButtons(isSender: MutableState<Boolean>, isTest: MutableState<Boolean>) {
-        Button(modifier = Modifier.fillMaxWidth(), onClick = ::startWork) {
-            Text("startWork")
-        }
-
         Button(
             modifier = Modifier.fillMaxWidth(),
-            onClick = ::discoverPeers
+            onClick = {
+                communicationManager.onStart()
+            }
         ) {
-            Text("Discover Peers")
+            Text("Start Communication")
         }
 
         Button(
             modifier = Modifier.fillMaxWidth(),
-            onClick = ::getAllIpsInLocaleNetwork
+            onClick = ::findAllIpsInLocaleNetwork
         ) {
             Text("Get All Ips In Locale Network")
         }
@@ -164,13 +168,26 @@ class MainActivity : ComponentActivity() {
         }
         Button(
             modifier = Modifier.fillMaxWidth(),
-            onClick = ::sendDataToRemoteDevices
+            onClick = {
+                communicationManager.sendToRemoteClients(
+                    TransferData(
+                        messageCode = 200,
+                        data = "I hope the message: $messageCount is not lost"
+                    )
+                )
+                messageCount++
+            }
         ) {
             Text(buttonText)
         }
 
-        Button(modifier = Modifier.fillMaxWidth(), onClick = ::stopWork) {
-            Text("stopWork")
+        Button(
+            modifier = Modifier.fillMaxWidth(),
+            onClick = {
+                communicationManager.onStop()
+            }
+        ) {
+            Text("Stop Communication")
         }
     }
 
@@ -270,40 +287,10 @@ class MainActivity : ComponentActivity() {
         communicationManager.onStop()
     }
 
-    private fun startWork() {
-        communicationManager.onStart()
-    }
-
-    private fun getAllIpsInLocaleNetwork() {
+    private fun findAllIpsInLocaleNetwork() {
         lifecycleScope.launch(Dispatchers.IO) {
-            communicationManager.getAllIpsInLocaleNetwork()
-        }
-    }
-
-    private fun discoverPeers() {
-        lifecycleScope.launch(Dispatchers.IO) {
-            communicationManager.discoverPeers()
-        }
-    }
-
-    private fun stopWork() {
-        communicationManager.onStop()
-    }
-
-    private fun sendDataToRemoteDevices() {
-        lifecycleScope.launch(Dispatchers.IO) {
-            runCatching {
-                communicationManager.sendBroadcast(
-                    TransferData(
-                        200,
-                        "Broadcast message $messageCount to all devices"
-                    )
-                )
-                messageCount++
-
-            }.getOrElse {
-                Log.d("CommunicationLogger", "sendDataToRemoteDevices error $it")
-            }
+            val localeIp = getLocalIpAddress(logger) ?: return@launch
+            getAllIpsInLocaleNetwork(localeIp)
         }
     }
 }

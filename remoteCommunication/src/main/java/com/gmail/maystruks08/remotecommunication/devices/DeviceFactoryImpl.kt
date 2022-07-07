@@ -16,9 +16,10 @@ class DeviceFactoryImpl(
         SocketFactoryImpl(logger)
     }
 
-
-    override fun createClient(): ClientDevice {
+    override fun createClient(deviceName: String, deviceIpAddress: String): ClientDevice {
         return ClientDeviceImpl(
+            deviceName = deviceName,
+            ipAddress = deviceIpAddress,
             socketFactory = socketFactory,
             logger = logger
         )

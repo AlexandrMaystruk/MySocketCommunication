@@ -6,5 +6,5 @@ import java.net.Socket
 
 interface SocketFactory {
     fun create(config: SocketConfiguration): Socket
-    fun createServerSocket(): ServerSocket
+    fun createServerSocket(port: Int): ServerSocket
 }

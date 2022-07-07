@@ -1,4 +1,4 @@
-package com.gmail.maystruks08.remotecommunication
+package com.gmail.maystruks08.remotecommunication.managers
 
 import android.annotation.SuppressLint
 import android.content.BroadcastReceiver
@@ -11,9 +11,14 @@ import android.net.wifi.p2p.WifiP2pConfig
 import android.net.wifi.p2p.WifiP2pDevice
 import android.net.wifi.p2p.WifiP2pInfo
 import android.net.wifi.p2p.WifiP2pManager
+import android.net.wifi.p2p.nsd.WifiP2pDnsSdServiceInfo
 import android.os.Looper
+import com.gmail.maystruks08.communicationimplementation.ServerImpl.Companion.LOCAL_SERVER_PORT
 import com.gmail.maystruks08.communicationinterface.CommunicationLogger
 import com.gmail.maystruks08.communicationinterface.entity.RemoteError
+import com.gmail.maystruks08.remotecommunication.getLocalIpAddress
+import com.gmail.maystruks08.remotecommunication.managers.NsdController.Companion.SERVICE_NAME
+import com.gmail.maystruks08.remotecommunication.managers.NsdController.Companion.SERVICE_TYPE
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -24,7 +29,7 @@ import kotlin.coroutines.resumeWithException
 import kotlin.coroutines.suspendCoroutine
 
 @SuppressLint("MissingPermission")
-class P2pManagerImpl(
+class P2pController(
     private val context: Context,
     private val coroutineScope: CoroutineScope,
     private val dispatcher: CoroutineDispatcher = Dispatchers.IO,
@@ -35,32 +40,35 @@ class P2pManagerImpl(
     private val _devicesMutex = Mutex()
     private val _devices = mutableMapOf<WifiP2pDevice, Boolean>()
     private var _channel: WifiP2pManager.Channel? = null
-    private val _p2pBroadcastCommandSharedFlow = MutableSharedFlow<P2pBroadcastCommand>()
+    private val _p2PControllerCommandSharedFlow = MutableSharedFlow<P2pControllerCommand>()
     private val _channelListener = WifiP2pManager.ChannelListener {
         logger.log("$TAG onChannelDisconnected")
     }
 
-    val p2pBroadcastCommandFlow: Flow<P2pBroadcastCommand>
-        get() = _p2pBroadcastCommandSharedFlow
+    val p2PControllerCommandFlow: Flow<P2pControllerCommand>
+        get() = _p2PControllerCommandSharedFlow
 
     fun startWork() {
+        logger.log("$TAG startWork")
         _channel = _wifiP2pManager.initialize(context, Looper.getMainLooper(), _channelListener)
         registerReceiver(this, fullIntentFilter)
-        coroutineScope.launch(dispatcher) { getWifiP2pDevices() }
     }
 
     suspend fun getWifiP2pDevices(): List<WifiP2pDevice> {
-        logger.log("$TAG discoverPeers")
+        logger.log("$TAG discoverPeers started")
         _devicesMutex.withLock {
             withContext(dispatcher) {
+                discoverPeers()
+                requestPeers()
+                if(_devices.isEmpty()){
+                    logger.log("$TAG waiting peers..")
+                }
                 while (_devices.isEmpty()) {
-                    discoverPeers()
-                    requestPeers()
                     delay(500)
                 }
             }
         }
-        logger.log("$TAG discoverPeers finished")
+        logger.log("$TAG discoverPeers finished: ${_devices.map { "${it.key.deviceName} ${it.key.isGroupOwner}," }}}")
         return _devices.keys.toList()
     }
 
@@ -98,8 +106,8 @@ class P2pManagerImpl(
     }
 
     fun stopWork() {
+        logger.log("$TAG stopWork")
         unregisterReceiver(this)
-        logger.log("$TAG onPause")
         deletePersistentGroups()
         removeGroup()
     }
@@ -129,11 +137,11 @@ class P2pManagerImpl(
                     val networkInfo =
                         intent.getParcelableExtra<NetworkInfo>(WifiP2pManager.EXTRA_NETWORK_INFO)
                     val command = if (networkInfo?.isConnected == true) {
-                        P2pBroadcastCommand.DeviceConnected
+                        P2pControllerCommand.DeviceConnected
                     } else {
-                        P2pBroadcastCommand.DeviceDisconnected
+                        P2pControllerCommand.DeviceDisconnected
                     }
-                    _p2pBroadcastCommandSharedFlow.emit(command)
+                    _p2PControllerCommandSharedFlow.emit(command)
                 }
             }
             WifiP2pManager.WIFI_P2P_THIS_DEVICE_CHANGED_ACTION -> {
@@ -141,12 +149,43 @@ class P2pManagerImpl(
                     val wifiP2pDevice = intent.getParcelableExtra<WifiP2pDevice>(
                         WifiP2pManager.EXTRA_WIFI_P2P_DEVICE
                     )
-                    _p2pBroadcastCommandSharedFlow.emit(
-                        P2pBroadcastCommand.CurrentDeviceChanged(wifiP2pDevice ?: return@launch)
+                    _p2PControllerCommandSharedFlow.emit(
+                        P2pControllerCommand.CurrentDeviceChanged(wifiP2pDevice ?: return@launch)
                     )
                 }
             }
         }
+    }
+
+    fun registerDnsService() {
+        val localeIp = getLocalIpAddress(logger) ?: "Can't get ip"
+        val record: Map<String, String> = mapOf(
+            DEVICE_PORT_KEY to LOCAL_SERVER_PORT.toString(),
+            DEVICE_IP_KEY to localeIp
+        )
+        val serviceInfo = WifiP2pDnsSdServiceInfo.newInstance(SERVICE_NAME, SERVICE_TYPE, record)
+        _wifiP2pManager.addLocalService(
+            _channel,
+            serviceInfo,
+            object : WifiP2pManager.ActionListener {
+                override fun onSuccess() = logger.log("addLocalService onSuccess")
+                override fun onFailure(arg0: Int) = logger.log("addLocalService onFailure: $arg0")
+            })
+    }
+
+    fun discoverDnsSdServiceResponse() {
+        _wifiP2pManager.setDnsSdResponseListeners(
+            _channel,
+            { instanceName, registrationType, resourceType ->
+                logger.log("onBonjourServiceAvailable $instanceName, ${resourceType.deviceName}")
+            },
+            { fullDomain, record, device ->
+                logger.log("DnsSdTxtRecord available. fullDomain: $fullDomain, deviceName: ${device.deviceName}")
+                val remoteDeviceIp = record[DEVICE_IP_KEY]
+                val remoteDevicePort = record[DEVICE_PORT_KEY]
+                logger.log("DnsSdTxtRecord ip:$remoteDeviceIp : port: $remoteDevicePort")
+            }
+        )
     }
 
     private suspend fun discoverPeers() {
@@ -167,16 +206,11 @@ class P2pManagerImpl(
     private suspend fun requestPeers() {
         suspendCoroutine<Any> { continuation ->
             _wifiP2pManager.requestPeers(_channel) { wifiP2pDeviceList ->
-                logger.log("$TAG requestPeers wifiP2pDeviceList size:${wifiP2pDeviceList.deviceList.size}")
-                //TODO improve _devices updating
                 val clients = wifiP2pDeviceList.deviceList
                 if (_devices.size != clients.size) {
                     val oldDevices = _devices.toMap()
                     _devices.clear()
-                    clients.forEach {
-                        logger.log("$TAG ${it.deviceName}, isGroupOwner: ${it.isGroupOwner}, status: ${it.status}")
-                        _devices[it] = oldDevices[it] ?: false
-                    }
+                    clients.forEach { _devices[it] = oldDevices[it] ?: false }
                 }
                 continuation.resume(Unit)
             }
@@ -219,7 +253,6 @@ class P2pManagerImpl(
                 }
             }
         } catch (e: Exception) {
-            e.printStackTrace()
             logger.log("waitConnectionBroadcast error: ${e.localizedMessage}")
             receiver?.let { unregisterReceiver(it) }
             false
@@ -254,7 +287,7 @@ class P2pManagerImpl(
 
     private fun deletePersistentGroups() {
         logger.log("$TAG deletePersistentGroups start")
-        try {
+        runCatching {
             val methods = WifiP2pManager::class.java.methods
             for (i in methods.indices) {
                 if (methods[i].name == "deletePersistentGroup") {
@@ -264,27 +297,32 @@ class P2pManagerImpl(
                     }
                 }
             }
-        } catch (e: Exception) {
-            logger.log("$TAG deletePersistentGroups error:${e.localizedMessage}")
-            e.printStackTrace()
+        }.onFailure {
+            logger.log("$TAG deletePersistentGroups error:${it.localizedMessage}")
         }
     }
 
     private fun removeGroup() {
-        _wifiP2pManager.removeGroup(_channel, object : WifiP2pManager.ActionListener {
-            override fun onSuccess() {
-                logger.log("$TAG disconnectDevice onSuccess")
-            }
+        runCatching {
+            _wifiP2pManager.removeGroup(_channel, object : WifiP2pManager.ActionListener {
+                override fun onSuccess() {
+                    logger.log("$TAG disconnectDevice onSuccess")
+                }
 
-            override fun onFailure(i: Int) {
-                logger.log("$TAG disconnectDevice onFailure:$i")
-            }
-        })
+                override fun onFailure(i: Int) {
+                    logger.log("$TAG disconnectDevice onFailure:$i")
+                }
+            })
+        }.onFailure {
+            logger.log("$TAG removeGroup error:${it.message}")
+        }
     }
 
 
     companion object {
-        private const val TAG = "P2pManager"
+        private const val TAG = "P2p->"
+        private const val DEVICE_PORT_KEY = "devicePort"
+        private const val DEVICE_IP_KEY = "deviceIp"
     }
 
 }

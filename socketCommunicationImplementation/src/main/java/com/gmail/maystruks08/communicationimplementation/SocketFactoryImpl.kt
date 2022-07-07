@@ -20,6 +20,7 @@ class SocketFactoryImpl(
            do {
                runCatching {
                    socket.bind(null)
+                   socket.reuseAddress = true
                    socket.connect(address, config.connectTimeout)
                }.getOrElse {
                    val errorMessage = it.message ?: it.localizedMessage
@@ -28,6 +29,9 @@ class SocketFactoryImpl(
                    attempt++
                }
            } while (!socket.isConnected && attempt < 10)
+           if(!socket.isConnected) {
+               logger.log("$TAG can't connect to socket")
+           }
            return@runCatching socket
         }.getOrElse {
             val errorMessage = it.message ?: it.localizedMessage
@@ -37,14 +41,14 @@ class SocketFactoryImpl(
         }
     }
 
-    override fun createServerSocket(): ServerSocket {
+    override fun createServerSocket(port: Int): ServerSocket {
         return runCatching {
             ServerSocket()
                 .apply {
                     reuseAddress = true
-                    val localIp = getLocalIpAddress()
-                    logger.log("$TAG Locale ip address: $localIp")
-                    bind(InetSocketAddress(localIp, LOCAL_SERVER_PORT), 55)
+                    val ip = getLocalIpAddress()
+                    logger.log("$TAG create on ip address: $ip")
+                    bind(InetSocketAddress(ip, port), 55)
                 }
         }.getOrElse {
             val errorMessage = it.message ?: it.localizedMessage
@@ -84,7 +88,6 @@ class SocketFactoryImpl(
 
     companion object {
         private const val TAG = "SocketFactory"
-        private const val LOCAL_SERVER_PORT = 8080
     }
 
 }

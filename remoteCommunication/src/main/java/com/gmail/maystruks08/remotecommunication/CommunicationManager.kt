@@ -1,7 +1,6 @@
 package com.gmail.maystruks08.remotecommunication
 
 import com.gmail.maystruks08.communicationinterface.entity.TransferData
-import com.gmail.maystruks08.remotecommunication.devices.ClientDevice
 import kotlinx.coroutines.flow.Flow
 
 interface CommunicationManager {
@@ -11,17 +10,15 @@ interface CommunicationManager {
      */
     fun onStart()
 
-    suspend fun discoverPeers()
+    /**
+     * Data which we receive from remote devices
+     */
+    fun getRemoteClientsTransferDataFlow(): Flow<TransferData>
 
     /**
      * Data which we send to remote devices
      */
-    suspend fun sendBroadcast(data: TransferData)
-
-    /**
-     * Data which we receive from remote devices
-     */
-    fun observeBroadcast(): Flow<TransferData>
+    fun sendToRemoteClients(data: TransferData)
 
     /**
      * Lifecycle fun, used to stop using component
