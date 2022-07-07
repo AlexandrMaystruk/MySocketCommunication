@@ -25,7 +25,9 @@ class NsdController(
     private var _currentServiceInfo: NsdServiceInfo? = null
     private val connectedServices = mutableSetOf<NsdServiceInfo>()
 
-    fun onStart() {
+    fun startWork() {
+        log("startWork")
+        _currentServiceInfo = null
         val serviceInfo = NsdServiceInfo().apply {
             serviceName = SERVICE_NAME
             serviceType = SERVICE_TYPE
@@ -51,16 +53,19 @@ class NsdController(
                 }
 
                 override fun onUnregistrationFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {
-                    log("Unregistration failed: $errorCode")
+                    log("unregistration failed: $errorCode")
                 }
             }.also { _registrationListener = it })
     }
 
-    fun onStop() {
+    fun stopWork() {
         _nsdManager.apply {
             _registrationListener?.let { unregisterService(it) }
             _discoveryListener?.let { stopServiceDiscovery(it) }
+            _currentServiceInfo = null
+            connectedServices.clear()
         }
+        log("stopWork")
     }
 
     fun discoverNdsServices(): Flow<NsdControllerCommand> {
@@ -70,17 +75,17 @@ class NsdController(
                 NsdManager.PROTOCOL_DNS_SD,
                 object : NsdManager.DiscoveryListener {
                     override fun onDiscoveryStarted(regType: String) {
-                        log("Service discovery started")
+                        log("service discovery started")
                     }
 
                     override fun onServiceFound(service: NsdServiceInfo) {
                         when {
                             // service.serviceType always return with dot at the end
                             service.serviceType != "$SERVICE_TYPE." -> {
-                                log("Found unknown service type: ${service.serviceType}")
+                                log("found unknown service type: ${service.serviceType}")
                             }
                             service.serviceName == _currentServiceInfo?.serviceName -> {
-                                log("Found same machine service: ${service.serviceName}")
+                                log("found same machine service: ${service.serviceName}")
                             }
                             service.serviceName.contains(SERVICE_NAME) -> {
                                 resolveServices(this@callbackFlow, service)
@@ -94,17 +99,17 @@ class NsdController(
                     }
 
                     override fun onDiscoveryStopped(serviceType: String) {
-                        log("Discovery stopped: $serviceType")
+                        log("discovery stopped: $serviceType")
                         trySendBlocking(NsdControllerCommand.ServiceDiscoveryFinished)
                     }
 
                     override fun onStartDiscoveryFailed(serviceType: String, errorCode: Int) {
-                        log("Discovery failed: Error code:$errorCode")
+                        log("discovery failed: Error code:$errorCode")
                         _nsdManager.stopServiceDiscovery(this)
                     }
 
                     override fun onStopDiscoveryFailed(serviceType: String, errorCode: Int) {
-                        log("Discovery failed: Error code:$errorCode")
+                        log("discovery failed: Error code:$errorCode")
                         _nsdManager.stopServiceDiscovery(this)
                     }
                 }.also { _discoveryListener = it })
@@ -119,11 +124,11 @@ class NsdController(
     ) {
         val resolveListener = object : NsdManager.ResolveListener {
             override fun onResolveFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {
-                log("Resolve failed: $errorCode")
+                log("resolve failed: $errorCode")
             }
 
             override fun onServiceResolved(serviceInfo: NsdServiceInfo) {
-                log("Resolve Succeeded. $serviceInfo")
+                log("resolve Succeeded. $serviceInfo")
                 if (serviceInfo.serviceName == _currentServiceInfo?.serviceName) {
                     log("resolved same current device")
                     return

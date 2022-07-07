@@ -11,12 +11,12 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.snapshots.SnapshotStateList
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.lifecycleScope
 import com.gmail.maystruks08.communicationinterface.CommunicationLogger
@@ -77,10 +77,8 @@ class MainActivity : ComponentActivity() {
                         })
                         ShowRemoteMessageDialog(isShownChangeOrderStateDialog, broadcastData)
                         Column {
-                            val isSender = remember { mutableStateOf(false) }
-                            val isTest = remember { mutableStateOf(false) }
-                            FeatureFlags(isSender, isTest)
-                            ActionButtons(isSender, isTest)
+                            Spacer(modifier = Modifier.padding(20.dp))
+                            ActionButtons()
                             LogsList(logsList)
                         }
                     }
@@ -114,60 +112,23 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    @OptIn(ExperimentalMaterial3Api::class)
     @Composable
-    fun FeatureFlags(isSender: MutableState<Boolean>, isTest: MutableState<Boolean>) {
-        Row(modifier = Modifier.fillMaxWidth()) {
-            Spacer(modifier = Modifier.weight(0.3f))
-            Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
-                Text("Is sender")
-                Checkbox(
-                    checked = isSender.value,
-                    onCheckedChange = {
-                        isSender.value = it
-                        (communicationManager as CommunicationManagerImpl).isSender = it
-                    }
-                )
-            }
-            Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
-                Text("Test only Client-Server communication")
-                Checkbox(
-                    checked = isTest.value,
-                    onCheckedChange = {
-                        isTest.value = it
-                        (communicationManager as CommunicationManagerImpl).isTest = it
-                    }
-                )
-            }
-            Spacer(modifier = Modifier.weight(0.3f))
-        }
-    }
-
-    @Composable
-    fun ActionButtons(isSender: MutableState<Boolean>, isTest: MutableState<Boolean>) {
+    fun ActionButtons() {
         Button(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
             onClick = {
                 communicationManager.onStart()
             }
         ) {
-            Text("Start Communication")
+            Text("onStart")
         }
 
         Button(
-            modifier = Modifier.fillMaxWidth(),
-            onClick = ::findAllIpsInLocaleNetwork
-        ) {
-            Text("Get All Ips In Locale Network")
-        }
-
-        val buttonText = if (isTest.value && !isSender.value) {
-            "Start server"
-        } else {
-            "Send data to remote device"
-        }
-        Button(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
             onClick = {
                 communicationManager.sendToRemoteClients(
                     TransferData(
@@ -178,16 +139,30 @@ class MainActivity : ComponentActivity() {
                 messageCount++
             }
         ) {
-            Text(buttonText)
+            Text("Send data")
         }
 
         Button(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
             onClick = {
                 communicationManager.onStop()
             }
         ) {
-            Text("Stop Communication")
+            Text("onStop")
+        }
+
+        Spacer(modifier = Modifier.padding(30.dp))
+
+
+        Button(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
+            onClick = ::findAllIpsInLocaleNetwork
+        ) {
+            Text("Get All Ips In Locale Network")
         }
     }
 

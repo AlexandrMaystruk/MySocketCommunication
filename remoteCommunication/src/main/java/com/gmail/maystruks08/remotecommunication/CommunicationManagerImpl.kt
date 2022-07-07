@@ -3,11 +3,7 @@ package com.gmail.maystruks08.remotecommunication
 import android.annotation.SuppressLint
 import android.content.Context
 import android.net.nsd.NsdServiceInfo
-import com.gmail.maystruks08.communicationimplementation.ClientImpl
-import com.gmail.maystruks08.communicationimplementation.ServerImpl.Companion.LOCAL_SERVER_PORT
-import com.gmail.maystruks08.communicationimplementation.SocketFactoryImpl
 import com.gmail.maystruks08.communicationinterface.CommunicationLogger
-import com.gmail.maystruks08.communicationinterface.entity.SocketConfiguration
 import com.gmail.maystruks08.communicationinterface.entity.TransferData
 import com.gmail.maystruks08.remotecommunication.devices.ClientDevice
 import com.gmail.maystruks08.remotecommunication.devices.DeviceFactory
@@ -28,11 +24,9 @@ class CommunicationManagerImpl(
     private val logger: CommunicationLogger
 ) : CommunicationManager {
 
-    var isSender = false
-    var isTest = false
-    private var _lastConnectedServiceIpAddress: String? = null //for test only
-
-    private var isStarted = AtomicBoolean(false)
+    private var _isStarted = AtomicBoolean(false)
+    private val _clients = mutableSetOf<ClientDevice>()
+    private var _listenRemoteDataJob: Job? = null
     private val _incomingDataFlow = MutableSharedFlow<TransferData>()
     private val _p2pManager by lazy { P2pController(context, coroutineScope, dispatcher, logger) }
     private val _nsdManager by lazy { NsdController(context, logger) }
@@ -40,17 +34,15 @@ class CommunicationManagerImpl(
     private val _deviceFactory: DeviceFactory by lazy {
         DeviceFactoryImpl(coroutineScope, dispatcher, logger)
     }
-    private val clients = mutableSetOf<ClientDevice>()
-    private var _listenRemoteDataJob: Job? = null
 
     @Suppress("DEPRECATION")
     override fun onStart() {
-        logger.log("$TAG onResume")
+        log("onResume")
         _p2pManager.startWork()
-        _nsdManager.onStart()
+        _nsdManager.startWork()
         runHostDevice()
         discoverNdsServices()
-        isStarted.set(true)
+        _isStarted.set(true)
     }
 
     override fun getRemoteClientsTransferDataFlow(): Flow<TransferData> {
@@ -58,37 +50,38 @@ class CommunicationManagerImpl(
     }
 
     override fun sendToRemoteClients(data: TransferData) {
-        if (isTest) {
-            testCommunication(data)
-            return
-        }
-        if (!isSender) {
-            logger.log("$TAG change to sender!")
+        if (!_isStarted.get()) {
+            log("call firstly onStart()")
             return
         }
 
-        if (clients.isEmpty()) {
-            logger.log("$TAG no connected clients, can't send!!!")
+        if (_clients.isEmpty()) {
+            log("no connected clients, can't send!!!")
             return
         }
 
-        clients.forEach { clientDevice ->
+        _clients.forEach { clientDevice ->
             coroutineScope.launch(dispatcher) {
                 runCatching {
                     clientDevice.sendData(data)
                 }.onFailure {
-                    logger.log("$TAG failure send to client: ${clientDevice.ipAddress}")
+                    log("failure send to client: ${clientDevice.ipAddress}")
                 }
             }
         }
     }
 
     override fun onStop() {
-        logger.log("$TAG onStop")
+        if (!_isStarted.get()) {
+            log("component already onStop() ")
+            return
+        }
+        log("onStop")
         _listenRemoteDataJob?.cancel()
-        _nsdManager.onStop()
+        _clients.clear()
+        _nsdManager.stopWork()
         _p2pManager.stopWork()
-        isStarted.set(false)
+        _isStarted.set(false)
     }
 
     private fun discoverNdsServices() {
@@ -107,15 +100,13 @@ class CommunicationManagerImpl(
     }
 
     private fun handleNewServiceConnection(nsdServiceInfo: NsdServiceInfo) {
-        _lastConnectedServiceIpAddress = nsdServiceInfo.host.hostAddress //for test only
-
-        logger.log("$TAG start handle new client")
-        clients.find { it.deviceName == nsdServiceInfo.serviceName } ?: run {
-            clients.add(_deviceFactory.createClient(
+        log("start handle new client")
+        _clients.find { it.deviceName == nsdServiceInfo.serviceName } ?: run {
+            _clients.add(_deviceFactory.createClient(
                 deviceName = nsdServiceInfo.serviceName,
                 deviceIpAddress = nsdServiceInfo.host.hostAddress ?: return
             ).also {
-                logger.log("$TAG new client created")
+                log("new client created")
             })
         }
     }
@@ -125,31 +116,15 @@ class CommunicationManagerImpl(
             _listenRemoteDataJob?.cancel()
             _listenRemoteDataJob = coroutineScope.launch(dispatcher) {
                 _hostDevice.listenRemoteData().collect {
-                    logger.log("$TAG HostDeviceImpl read data $it")
+                    log("HostDeviceImpl read data $it")
                     _incomingDataFlow.emit(it)
                 }
             }
         }
     }
 
-
-    private fun testCommunication(data: TransferData) {
-        if (isSender) {
-            runCatching {
-                val socketFactory = SocketFactoryImpl(logger)
-                val config = SocketConfiguration(
-                    _lastConnectedServiceIpAddress.orEmpty(),
-                    LOCAL_SERVER_PORT,
-                    1000,
-                    5 * 1000
-                )
-                val socket = socketFactory.create(config)
-                ClientImpl(socket, logger).also {
-                    it.write(data)
-                    it.close()
-                }
-            }
-        }
+    private fun log(message: String) {
+        logger.log("$TAG $message")
     }
 
     companion object {

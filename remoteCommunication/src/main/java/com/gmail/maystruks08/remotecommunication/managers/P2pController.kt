@@ -106,10 +106,9 @@ class P2pController(
     }
 
     fun stopWork() {
-        logger.log("$TAG stopWork")
         unregisterReceiver(this)
-        deletePersistentGroups()
-        removeGroup()
+        tryToRemoveGroup()
+        logger.log("$TAG stopWork")
     }
 
 
@@ -284,25 +283,8 @@ class P2pController(
     private val connectionIntentFilter =
         IntentFilter(WifiP2pManager.WIFI_P2P_CONNECTION_CHANGED_ACTION)
 
-
-    private fun deletePersistentGroups() {
-        logger.log("$TAG deletePersistentGroups start")
-        runCatching {
-            val methods = WifiP2pManager::class.java.methods
-            for (i in methods.indices) {
-                if (methods[i].name == "deletePersistentGroup") {
-                    // Delete any persistent group
-                    for (netId in 0..31) {
-                        methods[i].invoke(_wifiP2pManager, _channel, netId, null)
-                    }
-                }
-            }
-        }.onFailure {
-            logger.log("$TAG deletePersistentGroups error:${it.localizedMessage}")
-        }
-    }
-
-    private fun removeGroup() {
+    private fun tryToRemoveGroup() {
+        if(_devices.isEmpty()) return
         runCatching {
             _wifiP2pManager.removeGroup(_channel, object : WifiP2pManager.ActionListener {
                 override fun onSuccess() {
@@ -313,8 +295,6 @@ class P2pController(
                     logger.log("$TAG disconnectDevice onFailure:$i")
                 }
             })
-        }.onFailure {
-            logger.log("$TAG removeGroup error:${it.message}")
         }
     }
 
