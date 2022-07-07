@@ -9,15 +9,16 @@ import com.gmail.maystruks08.communicationimplementation.SocketFactoryImpl
 import com.gmail.maystruks08.communicationinterface.CommunicationLogger
 import com.gmail.maystruks08.communicationinterface.entity.SocketConfiguration
 import com.gmail.maystruks08.communicationinterface.entity.TransferData
+import com.gmail.maystruks08.remotecommunication.devices.ClientDevice
 import com.gmail.maystruks08.remotecommunication.devices.DeviceFactory
 import com.gmail.maystruks08.remotecommunication.devices.DeviceFactoryImpl
-import com.gmail.maystruks08.remotecommunication.managers.NsdControllerImpl
-import com.gmail.maystruks08.remotecommunication.managers.NsdServiceCommand
-import com.gmail.maystruks08.remotecommunication.managers.P2pBroadcastCommand
-import com.gmail.maystruks08.remotecommunication.managers.P2pControllerImpl
+import com.gmail.maystruks08.remotecommunication.managers.NsdController
+import com.gmail.maystruks08.remotecommunication.managers.NsdControllerCommand
+import com.gmail.maystruks08.remotecommunication.managers.P2pController
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
+import java.util.concurrent.atomic.AtomicBoolean
 
 @SuppressLint("MissingPermission")
 class CommunicationManagerImpl(
@@ -29,93 +30,34 @@ class CommunicationManagerImpl(
 
     var isSender = false
     var isTest = false
+    private var _lastConnectedServiceIpAddress: String? = null //for test only
 
-    var nsdServiceInfo: NsdServiceInfo? = null
-
+    private var isStarted = AtomicBoolean(false)
     private val _incomingDataFlow = MutableSharedFlow<TransferData>()
-    private val _p2pManager by lazy { P2pControllerImpl(context, coroutineScope, dispatcher, logger) }
-    private val _nsdManager by lazy { NsdControllerImpl(context, coroutineScope, dispatcher, logger) }
+    private val _p2pManager by lazy { P2pController(context, coroutineScope, dispatcher, logger) }
+    private val _nsdManager by lazy { NsdController(context, logger) }
+    private val _hostDevice by lazy { _deviceFactory.createHost() }
     private val _deviceFactory: DeviceFactory by lazy {
-        DeviceFactoryImpl(
-            coroutineScope,
-            dispatcher,
-            logger
-        )
+        DeviceFactoryImpl(coroutineScope, dispatcher, logger)
     }
-
-    private var hostDevice = _deviceFactory.createHost()
-    private var listenRemoteDataJob: Job? = null
-
+    private val clients = mutableSetOf<ClientDevice>()
+    private var _listenRemoteDataJob: Job? = null
 
     @Suppress("DEPRECATION")
     override fun onStart() {
         logger.log("$TAG onResume")
         _p2pManager.startWork()
-        coroutineScope.launch(dispatcher) {
-            _p2pManager.p2pBroadcastCommandFlow.collect { p2pBroadcastCommand ->
-                logger.log("$TAG command: ${p2pBroadcastCommand.javaClass.simpleName}")
-                when (p2pBroadcastCommand) {
-                    is P2pBroadcastCommand.CurrentDeviceChanged -> {
-                        logger.log("$TAG ${p2pBroadcastCommand.wifiP2pDevice.deviceName}")
-                    }
-                    P2pBroadcastCommand.DeviceConnected -> {
-                        if (isSender) {
-                            logger.log("$TAG host device not started because device send command")
-                            return@collect
-                        }
-                        listenRemoteData()
-                    }
-                    P2pBroadcastCommand.DeviceDisconnected -> {
-                        //handle this case
-                    }
-                }
-            }
-        }
-    }
-
-    fun nsdManagerOnStart() {
         _nsdManager.onStart()
+        runHostDevice()
+        discoverNdsServices()
+        isStarted.set(true)
     }
 
-    fun discoverNdsServices() {
-        coroutineScope.launch {
-            _nsdManager.discoverNdsServices().collect {
-                logger.log("$TAG command collected $it")
-                delay(1000)
-                async(Dispatchers.Default) {
-                    logger.log("$TAG command collected  and start async")
-                    delay(1000)
-                    when (it) {
-                        is NsdServiceCommand.ReceivedRemoteConnectionInfo -> {
-                            nsdServiceInfo = it.nsdServiceInfo
-                            sendData(
-                                TransferData(
-                                    200,
-                                    "Fuck you, wifi direct!!!"
-                                )
-                            )
-                        }
-                    }
-                }.await()
-            }
-        }
+    override fun getRemoteClientsTransferDataFlow(): Flow<TransferData> {
+        return _incomingDataFlow
     }
 
-    fun nsdManagerOnStop() {
-        _nsdManager.onStop()
-    }
-
-    fun registerDnsService() {
-        _p2pManager.registerDnsService()
-    }
-
-    fun discoverDnsService() {
-        _p2pManager.discoverDnsService()
-    }
-
-    override suspend fun sendBroadcast(data: TransferData) {
-        logger.log("$TAG sendBroadcast")
-
+    override fun sendToRemoteClients(data: TransferData) {
         if (isTest) {
             testCommunication(data)
             return
@@ -125,67 +67,86 @@ class CommunicationManagerImpl(
             return
         }
 
-        _p2pManager.getWifiP2pDevices().forEach {
-            val isConnected = runCatching {
-                _p2pManager.sendConnectRequest(it)
-            }.getOrDefault(false)
+        if (clients.isEmpty()) {
+            logger.log("$TAG no connected clients, can't send!!!")
+            return
+        }
 
-            if (isConnected) {
-                val wifiP2pInfo = _p2pManager.getConnectionInfo()
-                //TODO groupOwnerAddress is always 192.168.49.1 WTF ??????????
-                if (wifiP2pInfo.isGroupOwner && wifiP2pInfo.groupOwnerAddress != null) {
-                    val client = _deviceFactory.createClient()
-                    client.sendData(wifiP2pInfo.groupOwnerAddress.hostName, data)
-                } else {
-                    listenRemoteData()
+        clients.forEach { clientDevice ->
+            coroutineScope.launch(dispatcher) {
+                runCatching {
+                    clientDevice.sendData(data)
+                }.onFailure {
+                    logger.log("$TAG failure send to client: ${clientDevice.ipAddress}")
                 }
             }
         }
     }
 
-    override fun observeBroadcast(): Flow<TransferData> {
-        logger.log("$TAG observeBroadcast")
-        return _incomingDataFlow
-    }
-
-
     override fun onStop() {
-        logger.log("$TAG onPause")
+        logger.log("$TAG onStop")
+        _listenRemoteDataJob?.cancel()
+        _nsdManager.onStop()
         _p2pManager.stopWork()
+        isStarted.set(false)
     }
 
-    private suspend fun testCommunication(data: TransferData) {
-        if (isSender) {
-            sendData(data)
-        } else {
-            listenRemoteData()
-        }
-    }
+    private fun discoverNdsServices() {
+        coroutineScope.launch(dispatcher) {
+            _nsdManager.discoverNdsServices().collect {
+                when (it) {
+                    is NsdControllerCommand.NewServiceConnected -> {
+                        handleNewServiceConnection(it.nsdServiceInfo)
+                    }
+                    NsdControllerCommand.ServiceDiscoveryFinished -> {
 
-    private fun sendData(data: TransferData) {
-        runCatching {
-            val socketFactory = SocketFactoryImpl(logger)
-            val config = SocketConfiguration(
-                nsdServiceInfo?.host?.hostAddress.orEmpty(),
-                LOCAL_SERVER_PORT,
-                1000,
-                5 * 1000
-            )
-            val socket = socketFactory.create(config)
-            ClientImpl(socket, logger).also {
-                it.write(data)
-                it.close()
+                    }
+                }
             }
         }
     }
 
-    private suspend fun listenRemoteData() {
+    private fun handleNewServiceConnection(nsdServiceInfo: NsdServiceInfo) {
+        _lastConnectedServiceIpAddress = nsdServiceInfo.host.hostAddress //for test only
+
+        logger.log("$TAG start handle new client")
+        clients.find { it.deviceName == nsdServiceInfo.serviceName } ?: run {
+            clients.add(_deviceFactory.createClient(
+                deviceName = nsdServiceInfo.serviceName,
+                deviceIpAddress = nsdServiceInfo.host.hostAddress ?: return
+            ).also {
+                logger.log("$TAG new client created")
+            })
+        }
+    }
+
+    private fun runHostDevice() {
         runCatching {
-            listenRemoteDataJob?.cancel()
-            listenRemoteDataJob = coroutineScope.launch {
-                hostDevice.listenRemoteData().collect {
+            _listenRemoteDataJob?.cancel()
+            _listenRemoteDataJob = coroutineScope.launch(dispatcher) {
+                _hostDevice.listenRemoteData().collect {
                     logger.log("$TAG HostDeviceImpl read data $it")
                     _incomingDataFlow.emit(it)
+                }
+            }
+        }
+    }
+
+
+    private fun testCommunication(data: TransferData) {
+        if (isSender) {
+            runCatching {
+                val socketFactory = SocketFactoryImpl(logger)
+                val config = SocketConfiguration(
+                    _lastConnectedServiceIpAddress.orEmpty(),
+                    LOCAL_SERVER_PORT,
+                    1000,
+                    5 * 1000
+                )
+                val socket = socketFactory.create(config)
+                ClientImpl(socket, logger).also {
+                    it.write(data)
+                    it.close()
                 }
             }
         }

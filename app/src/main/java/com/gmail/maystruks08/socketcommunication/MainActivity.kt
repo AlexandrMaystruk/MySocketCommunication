@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.lifecycleScope
 import com.gmail.maystruks08.communicationinterface.CommunicationLogger
 import com.gmail.maystruks08.communicationinterface.entity.TransferData
+import com.gmail.maystruks08.remotecommunication.CommunicationManager
 import com.gmail.maystruks08.remotecommunication.CommunicationManagerImpl
 import com.gmail.maystruks08.remotecommunication.getAllIpsInLocaleNetwork
 import com.gmail.maystruks08.remotecommunication.getLocalIpAddress
@@ -43,12 +44,12 @@ class MainActivity : ComponentActivity() {
         }
 
         override fun logError(exception: Exception, message: String) {
-            Log.e("CommunicationLogger", message, exception)
+            Log.e("Logger", message, exception)
             logsList.add(message)
         }
     }
 
-    private val communicationManager: CommunicationManagerImpl by lazy {
+    private val communicationManager: CommunicationManager by lazy {
         CommunicationManagerImpl(
             applicationContext,
             lifecycleScope,
@@ -69,7 +70,7 @@ class MainActivity : ComponentActivity() {
                         val isShownChangeOrderStateDialog = remember { mutableStateOf(false) }
                         val broadcastData = remember { mutableStateOf("") }
                         LaunchedEffect(key1 = communicationManager, block = {
-                            communicationManager.observeBroadcast().collect {
+                            communicationManager.getRemoteClientsTransferDataFlow().collect {
                                 broadcastData.value = it.toString()
                                 isShownChangeOrderStateDialog.value = true
                             }
@@ -124,7 +125,7 @@ class MainActivity : ComponentActivity() {
                     checked = isSender.value,
                     onCheckedChange = {
                         isSender.value = it
-                        communicationManager.isSender = it
+                        (communicationManager as CommunicationManagerImpl).isSender = it
                     }
                 )
             }
@@ -134,7 +135,7 @@ class MainActivity : ComponentActivity() {
                     checked = isTest.value,
                     onCheckedChange = {
                         isTest.value = it
-                        communicationManager.isTest = it
+                        (communicationManager as CommunicationManagerImpl).isTest = it
                     }
                 )
             }
@@ -150,7 +151,7 @@ class MainActivity : ComponentActivity() {
                 communicationManager.onStart()
             }
         ) {
-            Text("startWork P2p")
+            Text("Start Communication")
         }
 
         Button(
@@ -167,7 +168,15 @@ class MainActivity : ComponentActivity() {
         }
         Button(
             modifier = Modifier.fillMaxWidth(),
-            onClick = ::sendDataToRemoteDevices
+            onClick = {
+                communicationManager.sendToRemoteClients(
+                    TransferData(
+                        messageCode = 200,
+                        data = "I hope the message: $messageCount is not lost"
+                    )
+                )
+                messageCount++
+            }
         ) {
             Text(buttonText)
         }
@@ -178,52 +187,7 @@ class MainActivity : ComponentActivity() {
                 communicationManager.onStop()
             }
         ) {
-            Text("stopWork P2p")
-        }
-
-        Button(
-            modifier = Modifier.fillMaxWidth(),
-            onClick = {
-                communicationManager.nsdManagerOnStart()
-            }
-        ) {
-            Text("nsdManagerOnStart")
-        }
-
-        Button(
-            modifier = Modifier.fillMaxWidth(),
-            onClick = {
-                communicationManager.discoverNdsServices()
-            }
-        ) {
-            Text("discoverNdsServices")
-        }
-
-        Button(
-            modifier = Modifier.fillMaxWidth(),
-            onClick = {
-                communicationManager.registerDnsService()
-            }
-        ) {
-            Text("registerDnsService")
-        }
-
-        Button(
-            modifier = Modifier.fillMaxWidth(),
-            onClick = {
-                communicationManager.discoverDnsService()
-            }
-        ) {
-            Text("discoverDnsService")
-        }
-
-        Button(
-            modifier = Modifier.fillMaxWidth(),
-            onClick = {
-                communicationManager.nsdManagerOnStop()
-            }
-        ) {
-            Text("nsdManagerOnStop")
+            Text("Stop Communication")
         }
     }
 
@@ -327,23 +291,6 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch(Dispatchers.IO) {
             val localeIp = getLocalIpAddress(logger) ?: return@launch
             getAllIpsInLocaleNetwork(localeIp)
-        }
-    }
-
-    private fun sendDataToRemoteDevices() {
-        lifecycleScope.launch(Dispatchers.IO) {
-            runCatching {
-                communicationManager.sendBroadcast(
-                    TransferData(
-                        200,
-                        "Broadcast message $messageCount to all devices"
-                    )
-                )
-                messageCount++
-
-            }.getOrElse {
-                Log.d("Logger", "sendDataToRemoteDevices error $it")
-            }
         }
     }
 }

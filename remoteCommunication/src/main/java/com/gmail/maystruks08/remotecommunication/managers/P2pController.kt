@@ -17,8 +17,8 @@ import com.gmail.maystruks08.communicationimplementation.ServerImpl.Companion.LO
 import com.gmail.maystruks08.communicationinterface.CommunicationLogger
 import com.gmail.maystruks08.communicationinterface.entity.RemoteError
 import com.gmail.maystruks08.remotecommunication.getLocalIpAddress
-import com.gmail.maystruks08.remotecommunication.managers.NsdControllerImpl.Companion.SERVICE_NAME
-import com.gmail.maystruks08.remotecommunication.managers.NsdControllerImpl.Companion.SERVICE_TYPE
+import com.gmail.maystruks08.remotecommunication.managers.NsdController.Companion.SERVICE_NAME
+import com.gmail.maystruks08.remotecommunication.managers.NsdController.Companion.SERVICE_TYPE
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -29,7 +29,7 @@ import kotlin.coroutines.resumeWithException
 import kotlin.coroutines.suspendCoroutine
 
 @SuppressLint("MissingPermission")
-class P2pControllerImpl(
+class P2pController(
     private val context: Context,
     private val coroutineScope: CoroutineScope,
     private val dispatcher: CoroutineDispatcher = Dispatchers.IO,
@@ -40,18 +40,18 @@ class P2pControllerImpl(
     private val _devicesMutex = Mutex()
     private val _devices = mutableMapOf<WifiP2pDevice, Boolean>()
     private var _channel: WifiP2pManager.Channel? = null
-    private val _p2pBroadcastCommandSharedFlow = MutableSharedFlow<P2pBroadcastCommand>()
+    private val _p2PControllerCommandSharedFlow = MutableSharedFlow<P2pControllerCommand>()
     private val _channelListener = WifiP2pManager.ChannelListener {
         logger.log("$TAG onChannelDisconnected")
     }
 
-    val p2pBroadcastCommandFlow: Flow<P2pBroadcastCommand>
-        get() = _p2pBroadcastCommandSharedFlow
+    val p2PControllerCommandFlow: Flow<P2pControllerCommand>
+        get() = _p2PControllerCommandSharedFlow
 
     fun startWork() {
+        logger.log("$TAG startWork")
         _channel = _wifiP2pManager.initialize(context, Looper.getMainLooper(), _channelListener)
         registerReceiver(this, fullIntentFilter)
-        coroutineScope.launch(dispatcher) { getWifiP2pDevices() }
     }
 
     suspend fun getWifiP2pDevices(): List<WifiP2pDevice> {
@@ -106,8 +106,8 @@ class P2pControllerImpl(
     }
 
     fun stopWork() {
+        logger.log("$TAG stopWork")
         unregisterReceiver(this)
-        logger.log("$TAG onPause")
         deletePersistentGroups()
         removeGroup()
     }
@@ -137,11 +137,11 @@ class P2pControllerImpl(
                     val networkInfo =
                         intent.getParcelableExtra<NetworkInfo>(WifiP2pManager.EXTRA_NETWORK_INFO)
                     val command = if (networkInfo?.isConnected == true) {
-                        P2pBroadcastCommand.DeviceConnected
+                        P2pControllerCommand.DeviceConnected
                     } else {
-                        P2pBroadcastCommand.DeviceDisconnected
+                        P2pControllerCommand.DeviceDisconnected
                     }
-                    _p2pBroadcastCommandSharedFlow.emit(command)
+                    _p2PControllerCommandSharedFlow.emit(command)
                 }
             }
             WifiP2pManager.WIFI_P2P_THIS_DEVICE_CHANGED_ACTION -> {
@@ -149,8 +149,8 @@ class P2pControllerImpl(
                     val wifiP2pDevice = intent.getParcelableExtra<WifiP2pDevice>(
                         WifiP2pManager.EXTRA_WIFI_P2P_DEVICE
                     )
-                    _p2pBroadcastCommandSharedFlow.emit(
-                        P2pBroadcastCommand.CurrentDeviceChanged(wifiP2pDevice ?: return@launch)
+                    _p2PControllerCommandSharedFlow.emit(
+                        P2pControllerCommand.CurrentDeviceChanged(wifiP2pDevice ?: return@launch)
                     )
                 }
             }
@@ -160,7 +160,7 @@ class P2pControllerImpl(
     fun registerDnsService() {
         val localeIp = getLocalIpAddress(logger) ?: "Can't get ip"
         val record: Map<String, String> = mapOf(
-            DEVICE_PORT_KEY to LOCAL_SERVER_PORT.toString(),//getFreePort().toString(),
+            DEVICE_PORT_KEY to LOCAL_SERVER_PORT.toString(),
             DEVICE_IP_KEY to localeIp
         )
         val serviceInfo = WifiP2pDnsSdServiceInfo.newInstance(SERVICE_NAME, SERVICE_TYPE, record)
@@ -173,7 +173,7 @@ class P2pControllerImpl(
             })
     }
 
-    fun discoverDnsService() {
+    fun discoverDnsSdServiceResponse() {
         _wifiP2pManager.setDnsSdResponseListeners(
             _channel,
             { instanceName, registrationType, resourceType ->

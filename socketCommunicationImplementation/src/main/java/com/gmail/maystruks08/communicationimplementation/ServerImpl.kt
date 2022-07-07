@@ -40,7 +40,7 @@ class ServerImpl(
             }
         }.getOrElse {
             logger.log("Server error: ${it.message}")
-            throw RuntimeException("Read from client error")
+            throw RuntimeException("Server error")
         }
     }
 
