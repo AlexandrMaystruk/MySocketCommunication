@@ -1,4 +1,4 @@
-package com.gmail.maystruks08.remotecommunication.managers
+package com.gmail.maystruks08.remotecommunication.controllers
 
 import android.annotation.SuppressLint
 import android.content.BroadcastReceiver
@@ -16,9 +16,10 @@ import android.os.Looper
 import com.gmail.maystruks08.communicationimplementation.ServerImpl.Companion.LOCAL_SERVER_PORT
 import com.gmail.maystruks08.communicationinterface.CommunicationLogger
 import com.gmail.maystruks08.communicationinterface.entity.RemoteError
+import com.gmail.maystruks08.remotecommunication.controllers.NsdController.Companion.SERVICE_NAME
+import com.gmail.maystruks08.remotecommunication.controllers.NsdController.Companion.SERVICE_TYPE
+import com.gmail.maystruks08.remotecommunication.controllers.commands.P2pControllerCommand
 import com.gmail.maystruks08.remotecommunication.getLocalIpAddress
-import com.gmail.maystruks08.remotecommunication.managers.NsdController.Companion.SERVICE_NAME
-import com.gmail.maystruks08.remotecommunication.managers.NsdController.Companion.SERVICE_TYPE
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -42,33 +43,33 @@ class P2pController(
     private var _channel: WifiP2pManager.Channel? = null
     private val _p2PControllerCommandSharedFlow = MutableSharedFlow<P2pControllerCommand>()
     private val _channelListener = WifiP2pManager.ChannelListener {
-        logger.log("$TAG onChannelDisconnected")
+        log("onChannelDisconnected")
     }
 
     val p2PControllerCommandFlow: Flow<P2pControllerCommand>
         get() = _p2PControllerCommandSharedFlow
 
     fun startWork() {
-        logger.log("$TAG startWork")
+        log("startWork")
         _channel = _wifiP2pManager.initialize(context, Looper.getMainLooper(), _channelListener)
         registerReceiver(this, fullIntentFilter)
     }
 
     suspend fun getWifiP2pDevices(): List<WifiP2pDevice> {
-        logger.log("$TAG discoverPeers started")
+        log("discoverPeers started")
         _devicesMutex.withLock {
             withContext(dispatcher) {
                 discoverPeers()
                 requestPeers()
                 if(_devices.isEmpty()){
-                    logger.log("$TAG waiting peers..")
+                    log("waiting peers..")
                 }
                 while (_devices.isEmpty()) {
                     delay(500)
                 }
             }
         }
-        logger.log("$TAG discoverPeers finished: ${_devices.map { "${it.key.deviceName} ${it.key.isGroupOwner}," }}}")
+        log("discoverPeers finished: ${_devices.map { "${it.key.deviceName} ${it.key.isGroupOwner}," }}}")
         return _devices.keys.toList()
     }
 
@@ -108,21 +109,21 @@ class P2pController(
     fun stopWork() {
         unregisterReceiver(this)
         tryToRemoveGroup()
-        logger.log("$TAG stopWork")
+        log("stopWork")
     }
 
 
     @Suppress("DEPRECATION")
     override fun onReceive(context: Context?, intent: Intent?) {
-        logger.log("$TAG onReceive ${intent?.action}")
+        log("onReceive ${intent?.action}")
         when (val action = intent?.action) {
             WifiP2pManager.WIFI_P2P_STATE_CHANGED_ACTION -> {
                 if (WifiP2pManager.WIFI_P2P_STATE_CHANGED_ACTION == action) {
                     val state = intent.getIntExtra(WifiP2pManager.EXTRA_WIFI_STATE, -1)
                     if (state == WifiP2pManager.WIFI_P2P_STATE_ENABLED) {
-                        logger.log("$TAG onReceive Wifi P2P is enabled")
+                        log("onReceive Wifi P2P is enabled")
                     } else {
-                        logger.log("$TAG onReceive Wi-Fi P2P is not enabled")
+                        log("onReceive Wi-Fi P2P is not enabled")
                     }
                 }
             }
@@ -195,7 +196,7 @@ class P2pController(
                 }
 
                 override fun onFailure(code: Int) {
-                    logger.log("$TAG discoverPeers onFailure. Error code: $code")
+                    log("discoverPeers onFailure. Error code: $code")
                     continuation.resume(Unit)
                 }
             })
@@ -203,6 +204,7 @@ class P2pController(
     }
 
     private suspend fun requestPeers() {
+        //potential place on concurrent modification exception!
         suspendCoroutine<Any> { continuation ->
             _wifiP2pManager.requestPeers(_channel) { wifiP2pDeviceList ->
                 val clients = wifiP2pDeviceList.deviceList
@@ -228,9 +230,9 @@ class P2pController(
 
     private suspend fun waitConnectionBroadcast(): Boolean {
         var receiver: BroadcastReceiver? = null
-        return try {
+        return runCatching {
             withTimeout(60 * 1000) {
-                suspendCoroutine { continuation ->
+                suspendCoroutine<Boolean> { continuation ->
                     val connectionChangeReceiver = object : BroadcastReceiver() {
                         override fun onReceive(context: Context?, intent: Intent?) {
                             when (intent?.action) {
@@ -251,8 +253,8 @@ class P2pController(
                     registerReceiver(connectionChangeReceiver, connectionIntentFilter)
                 }
             }
-        } catch (e: Exception) {
-            logger.log("waitConnectionBroadcast error: ${e.localizedMessage}")
+        }.getOrElse { throwable ->
+            logger.log("waitConnectionBroadcast error: ${throwable.localizedMessage}")
             receiver?.let { unregisterReceiver(it) }
             false
         }
@@ -288,16 +290,19 @@ class P2pController(
         runCatching {
             _wifiP2pManager.removeGroup(_channel, object : WifiP2pManager.ActionListener {
                 override fun onSuccess() {
-                    logger.log("$TAG disconnectDevice onSuccess")
+                    log("disconnectDevice onSuccess")
                 }
 
                 override fun onFailure(i: Int) {
-                    logger.log("$TAG disconnectDevice onFailure:$i")
+                    log("disconnectDevice onFailure:$i")
                 }
             })
         }
     }
 
+    private fun log(message: String) {
+        logger.log("$TAG $message")
+    }
 
     companion object {
         private const val TAG = "P2p->"

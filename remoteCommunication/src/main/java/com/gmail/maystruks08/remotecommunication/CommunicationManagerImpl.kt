@@ -8,9 +8,9 @@ import com.gmail.maystruks08.communicationinterface.entity.TransferData
 import com.gmail.maystruks08.remotecommunication.devices.ClientDevice
 import com.gmail.maystruks08.remotecommunication.devices.DeviceFactory
 import com.gmail.maystruks08.remotecommunication.devices.DeviceFactoryImpl
-import com.gmail.maystruks08.remotecommunication.managers.NsdController
-import com.gmail.maystruks08.remotecommunication.managers.NsdControllerCommand
-import com.gmail.maystruks08.remotecommunication.managers.P2pController
+import com.gmail.maystruks08.remotecommunication.controllers.NsdController
+import com.gmail.maystruks08.remotecommunication.controllers.commands.NsdControllerCommand
+import com.gmail.maystruks08.remotecommunication.controllers.P2pController
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -37,7 +37,11 @@ class CommunicationManagerImpl(
 
     @Suppress("DEPRECATION")
     override fun onStart() {
-        log("onResume")
+        if (_isStarted.get()) {
+            log("component already onStart()")
+            return
+        }
+        log("onStart")
         _p2pManager.startWork()
         _nsdManager.startWork()
         runHostDevice()
@@ -73,7 +77,7 @@ class CommunicationManagerImpl(
 
     override fun onStop() {
         if (!_isStarted.get()) {
-            log("component already onStop() ")
+            log("component already onStop()")
             return
         }
         log("onStop")
@@ -102,9 +106,11 @@ class CommunicationManagerImpl(
     private fun handleNewServiceConnection(nsdServiceInfo: NsdServiceInfo) {
         log("start handle new client")
         _clients.find { it.deviceName == nsdServiceInfo.serviceName } ?: run {
+            val newDeviceHostAddress = nsdServiceInfo.host.hostAddress ?: return
+            if (newDeviceHostAddress == _hostDevice.ipAddress) return
             _clients.add(_deviceFactory.createClient(
                 deviceName = nsdServiceInfo.serviceName,
-                deviceIpAddress = nsdServiceInfo.host.hostAddress ?: return
+                deviceIpAddress = newDeviceHostAddress
             ).also {
                 log("new client created")
             })

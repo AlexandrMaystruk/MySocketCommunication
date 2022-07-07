@@ -26,7 +26,12 @@ class DeviceFactoryImpl(
     }
 
     override fun createHost(): HostDevice {
-        return HostDeviceImpl(coroutineScope, dispatcher, logger, socketFactory)
+        return HostDeviceImpl(
+            coroutineScope = coroutineScope,
+            dispatcher = dispatcher,
+            logger = logger,
+            socketFactory = socketFactory
+        )
     }
 
 }
