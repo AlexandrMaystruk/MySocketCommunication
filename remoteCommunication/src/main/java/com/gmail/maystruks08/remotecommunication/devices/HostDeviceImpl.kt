@@ -19,14 +19,18 @@ class HostDeviceImpl(
     private val coroutineScope: CoroutineScope,
     private val dispatcher: CoroutineDispatcher,
     private val logger: CommunicationLogger,
-    private val socketFactory: SocketFactory
+    private val socketFactory: SocketFactory,
 ) : HostDevice, Closeable {
 
     private var server: Server? = null
 
+    override val ipAddress: String
+        get() = socketFactory.localeIpAddress
+
     override fun listenRemoteData(): Flow<TransferData> {
         close()
-        val server = ServerImpl(socketFactory, logger, dispatcher, coroutineScope).also { server = it }
+        val server =
+            ServerImpl(socketFactory, logger, dispatcher, coroutineScope).also { server = it }
         return callbackFlow {
             runCatching {
                 server.readFromClients { transferData ->

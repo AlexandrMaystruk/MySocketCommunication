@@ -45,8 +45,8 @@ fun getLocalIpAddress(logger: CommunicationLogger): String? {
             }
         }
     } catch (e: SocketException) {
-        logger.log("Communication -> getLocalIpAddress error: ${e.localizedMessage}")
+        logger.log("get ip address error: ${e.localizedMessage}")
     }
-    logger.log("Communication -> getLocalIpAddress return null")
+    logger.log("return null ip")
     return null
 }

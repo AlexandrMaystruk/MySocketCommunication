@@ -11,32 +11,35 @@ class SocketFactoryImpl(
     private val logger: CommunicationLogger
 ) : SocketFactory {
 
+    override val localeIpAddress: String
+        get() = getLocalIpAddress().orEmpty()
+
     override fun create(config: SocketConfiguration): Socket {
-       return runCatching {
-           val address = InetSocketAddress(config.ipAddress, config.inputPort)
-           logger.log("$TAG Start connect to: $address")
-           var attempt = 0
-           val socket = Socket()
-           do {
-               runCatching {
-                   socket.bind(null)
-                   socket.reuseAddress = true
-                   socket.connect(address, config.connectTimeout)
-               }.getOrElse {
-                   val errorMessage = it.message ?: it.localizedMessage
-                   logger.log("$TAG attempt $attempt: Create socket exception: $errorMessage")
-                   if (attempt >= 10) throw it
-                   attempt++
-               }
-           } while (!socket.isConnected && attempt < 10)
-           if(!socket.isConnected) {
-               logger.log("$TAG can't connect to socket")
-           }
-           return@runCatching socket
+        return runCatching {
+            val address = InetSocketAddress(config.ipAddress, config.inputPort)
+            logger.log("$TAG Start connect to: $address")
+            var attempt = 0
+            val socket = Socket()
+            do {
+                runCatching {
+                    socket.bind(null)
+                    socket.reuseAddress = true
+                    socket.connect(address, config.connectTimeout)
+                }.getOrElse {
+                    val errorMessage = it.message ?: it.localizedMessage
+                    logger.log("$TAG attempt $attempt: Create socket exception: $errorMessage")
+                    if (attempt >= 10) throw it
+                    attempt++
+                }
+            } while (!socket.isConnected && attempt < 10)
+            if (!socket.isConnected) {
+                logger.log("$TAG can't connect to socket")
+            }
+            return@runCatching socket
         }.getOrElse {
             val errorMessage = it.message ?: it.localizedMessage
-            logger.log("$TAG Create socket exception: $errorMessage")
-            logger.log("$TAG Ip address is reachable: ${ping(config.ipAddress)}")
+            logger.log("$TAG create socket exception: $errorMessage")
+            logger.log("$TAG ip address is reachable: ${ping(config.ipAddress)}")
             throw RemoteError.ConnectionError.CreateSocketError(errorMessage)
         }
     }
@@ -46,13 +49,13 @@ class SocketFactoryImpl(
             ServerSocket()
                 .apply {
                     reuseAddress = true
-                    val ip = getLocalIpAddress()
+                    val ip = localeIpAddress
                     logger.log("$TAG create on ip address: $ip")
                     bind(InetSocketAddress(ip, port), 55)
                 }
         }.getOrElse {
             val errorMessage = it.message ?: it.localizedMessage
-            logger.log("$TAG Create server socket exception: $errorMessage")
+            logger.log("$TAG create server socket exception: $errorMessage")
             throw RemoteError.ConnectionError.CreateSocketError(errorMessage)
         }
     }

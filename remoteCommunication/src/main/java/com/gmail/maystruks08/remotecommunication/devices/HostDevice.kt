@@ -6,6 +6,8 @@ import kotlinx.coroutines.flow.Flow
 
 interface HostDevice {
 
+    val ipAddress: String
+
     fun listenRemoteData(): Flow<TransferData>
 
 }

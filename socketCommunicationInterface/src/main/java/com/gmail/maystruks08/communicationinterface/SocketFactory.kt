@@ -5,6 +5,7 @@ import java.net.ServerSocket
 import java.net.Socket
 
 interface SocketFactory {
+    val localeIpAddress: String
     fun create(config: SocketConfiguration): Socket
     fun createServerSocket(port: Int): ServerSocket
 }

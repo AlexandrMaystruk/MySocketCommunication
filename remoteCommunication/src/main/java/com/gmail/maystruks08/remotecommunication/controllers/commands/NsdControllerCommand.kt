@@ -1,4 +1,4 @@
-package com.gmail.maystruks08.remotecommunication.managers
+package com.gmail.maystruks08.remotecommunication.controllers.commands
 
 import android.net.nsd.NsdServiceInfo
 

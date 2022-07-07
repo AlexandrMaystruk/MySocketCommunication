@@ -1,4 +1,4 @@
-package com.gmail.maystruks08.remotecommunication.managers
+package com.gmail.maystruks08.remotecommunication.controllers
 
 import android.annotation.SuppressLint
 import android.content.Context
@@ -6,6 +6,7 @@ import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
 import com.gmail.maystruks08.communicationimplementation.ServerImpl.Companion.LOCAL_SERVER_PORT
 import com.gmail.maystruks08.communicationinterface.CommunicationLogger
+import com.gmail.maystruks08.remotecommunication.controllers.commands.NsdControllerCommand
 import kotlinx.coroutines.channels.ProducerScope
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.channels.trySendBlocking
@@ -23,7 +24,7 @@ class NsdController(
     private var _discoveryListener: NsdManager.DiscoveryListener? = null
 
     private var _currentServiceInfo: NsdServiceInfo? = null
-    private val connectedServices = mutableSetOf<NsdServiceInfo>()
+    private val _connectedServices = mutableSetOf<NsdServiceInfo>()
 
     fun startWork() {
         log("startWork")
@@ -63,7 +64,9 @@ class NsdController(
             _registrationListener?.let { unregisterService(it) }
             _discoveryListener?.let { stopServiceDiscovery(it) }
             _currentServiceInfo = null
-            connectedServices.clear()
+            _registrationListener = null
+            _discoveryListener = null
+            _connectedServices.clear()
         }
         log("stopWork")
     }
@@ -84,8 +87,8 @@ class NsdController(
                             service.serviceType != "$SERVICE_TYPE." -> {
                                 log("found unknown service type: ${service.serviceType}")
                             }
-                            service.serviceName == _currentServiceInfo?.serviceName -> {
-                                log("found same machine service: ${service.serviceName}")
+                            service.checkIsTheSameService() -> {
+                                //log("found self service: ${service.serviceName}")
                             }
                             service.serviceName.contains(SERVICE_NAME) -> {
                                 resolveServices(this@callbackFlow, service)
@@ -95,7 +98,7 @@ class NsdController(
 
                     override fun onServiceLost(service: NsdServiceInfo) {
                         log("service lost: $service")
-                        connectedServices.remove(service)
+                        _connectedServices.remove(service)
                     }
 
                     override fun onDiscoveryStopped(serviceType: String) {
@@ -124,21 +127,32 @@ class NsdController(
     ) {
         val resolveListener = object : NsdManager.ResolveListener {
             override fun onResolveFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {
-                log("resolve failed: $errorCode")
+                if (!serviceInfo.checkIsTheSameService()) {
+                    log("resolve ${serviceInfo.toLog()} failed: $errorCode")
+                    return
+                }
             }
 
             override fun onServiceResolved(serviceInfo: NsdServiceInfo) {
-                log("resolve Succeeded. $serviceInfo")
-                if (serviceInfo.serviceName == _currentServiceInfo?.serviceName) {
+                if (serviceInfo.checkIsTheSameService()) {
                     log("resolved same current device")
                     return
                 }
-                connectedServices.add(serviceInfo)
+                log("resolve succeeded: ${serviceInfo.toLog()}")
+                _connectedServices.add(serviceInfo)
                 producerScope.trySendBlocking(NsdControllerCommand.NewServiceConnected(serviceInfo))
             }
         }
 
         _nsdManager.resolveService(service, resolveListener)
+    }
+
+    private fun NsdServiceInfo.checkIsTheSameService(): Boolean{
+        return serviceName == _currentServiceInfo?.serviceName
+    }
+
+    private fun NsdServiceInfo.toLog(): String{
+        return "$serviceName : ${host?.hostAddress.orEmpty()}"
     }
 
     private fun log(message: String) {
@@ -147,8 +161,8 @@ class NsdController(
 
     companion object {
         private const val TAG = "Nsd->"
-        const val SERVICE_TYPE = "_nsdchat._tcp"
-        const val SERVICE_NAME = "NsdChat"
+        internal const val SERVICE_TYPE = "_nsdchat._tcp"
+        internal const val SERVICE_NAME = "private_nsd_service"
     }
 
 }
