@@ -23,40 +23,21 @@ import com.gmail.maystruks08.communicationinterface.CommunicationLogger
 import com.gmail.maystruks08.communicationinterface.entity.TransferData
 import com.gmail.maystruks08.remotecommunication.CommunicationManager
 import com.gmail.maystruks08.remotecommunication.CommunicationManagerImpl
-import com.gmail.maystruks08.remotecommunication.getAllIpsInLocaleNetwork
+import com.gmail.maystruks08.remotecommunication.Configuration
 import com.gmail.maystruks08.remotecommunication.getLocalIpAddress
 import com.gmail.maystruks08.socketcommunication.ui.theme.SocketCommunicationTheme
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.rememberPermissionState
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
+import java.net.ServerSocket
 
 @OptIn(ExperimentalPermissionsApi::class)
 class MainActivity : ComponentActivity() {
 
+    private val communicationManager by lazy { createCommunicationManager() }
     private val logsList = mutableStateListOf<String>()
-    var messageCount = 0
-
-    private val logger = object : CommunicationLogger {
-        override fun log(message: String) {
-            Log.d("Logger", message)
-            logsList.add(message)
-        }
-
-        override fun logError(exception: Exception, message: String) {
-            Log.e("Logger", message, exception)
-            logsList.add(message)
-        }
-    }
-
-    private val communicationManager: CommunicationManager by lazy {
-        CommunicationManagerImpl(
-            applicationContext,
-            lifecycleScope,
-            Dispatchers.IO,
-            logger
-        )
-    }
+    private var messageCount = 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -92,7 +73,6 @@ class MainActivity : ComponentActivity() {
         showDialog: MutableState<Boolean>,
         broadcastData: MutableState<String>
     ) {
-        //show dialog
         if (showDialog.value) {
             AlertDialog(
                 title = {
@@ -106,7 +86,11 @@ class MainActivity : ComponentActivity() {
 
                 },
                 dismissButton = {
-
+                    Button(onClick = {
+                        showDialog.value = false
+                    }) {
+                        Text("Close")
+                    }
                 }
             )
         }
@@ -153,17 +137,7 @@ class MainActivity : ComponentActivity() {
             Text("onStop")
         }
 
-        Spacer(modifier = Modifier.padding(30.dp))
-
-
-        Button(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp),
-            onClick = ::findAllIpsInLocaleNetwork
-        ) {
-            Text("Get All Ips In Locale Network")
-        }
+        Spacer(modifier = Modifier.padding(20.dp))
     }
 
     @Composable
@@ -262,12 +236,37 @@ class MainActivity : ComponentActivity() {
         communicationManager.onStop()
     }
 
-    private fun findAllIpsInLocaleNetwork() {
-        lifecycleScope.launch(Dispatchers.IO) {
-            val localeIp = getLocalIpAddress(logger) ?: return@launch
-            getAllIpsInLocaleNetwork(localeIp)
+    private fun createCommunicationManager(): CommunicationManager {
+        val communicationLogger = object : CommunicationLogger {
+            override fun log(message: String) {
+                Log.d("Logger", message)
+                logsList.add(message)
+            }
+
+            override fun logError(exception: Exception, message: String) {
+                Log.e("Logger", message, exception)
+                logsList.add(message)
+            }
         }
+        val ip = getLocalIpAddress(communicationLogger).orEmpty()
+        var freePort: Int
+        ServerSocket(0).use { freePort = it.localPort }
+        val config = object : Configuration {
+            override val app = object : Configuration.App {
+                override val appName = "private_nsd_service"
+                override val context = applicationContext
+                override val coroutineScope: CoroutineScope = lifecycleScope
+                override val dispatcher = Dispatchers.IO
+                override val logger = communicationLogger
+            }
+            override val network = object : Configuration.Network {
+                override val localeIdAddress = ip
+                override val localePort = freePort
+            }
+        }
+        return CommunicationManagerImpl(config)
     }
+
 }
 
 @Composable

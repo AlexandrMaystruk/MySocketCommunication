@@ -1,35 +1,29 @@
 package com.gmail.maystruks08.remotecommunication.devices
 
 import com.gmail.maystruks08.communicationimplementation.SocketFactoryImpl
-import com.gmail.maystruks08.communicationinterface.CommunicationLogger
 import com.gmail.maystruks08.communicationinterface.SocketFactory
-import kotlinx.coroutines.CoroutineDispatcher
-import kotlinx.coroutines.CoroutineScope
+import com.gmail.maystruks08.remotecommunication.Configuration
 
 class DeviceFactoryImpl(
-    private val coroutineScope: CoroutineScope,
-    private val dispatcher: CoroutineDispatcher,
-    private val logger: CommunicationLogger
+    private val configuration: Configuration
 ) : DeviceFactory {
 
     private val socketFactory: SocketFactory by lazy {
-        SocketFactoryImpl(logger)
+        SocketFactoryImpl(configuration.app.logger)
     }
 
-    override fun createClient(deviceName: String, deviceIpAddress: String): ClientDevice {
+    override fun createClient(deviceIpAddress: String, port: Int): ClientDevice {
         return ClientDeviceImpl(
-            deviceName = deviceName,
             ipAddress = deviceIpAddress,
+            port = port,
             socketFactory = socketFactory,
-            logger = logger
+            logger = configuration.app.logger
         )
     }
 
     override fun createHost(): HostDevice {
         return HostDeviceImpl(
-            coroutineScope = coroutineScope,
-            dispatcher = dispatcher,
-            logger = logger,
+            configuration = configuration,
             socketFactory = socketFactory
         )
     }
