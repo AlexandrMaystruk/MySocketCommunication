@@ -16,7 +16,7 @@ class SocketFactoryImpl(
     override fun create(config: SocketConfiguration): Socket {
         return runCatching {
             val address = InetSocketAddress(config.ipAddress, config.inputPort)
-            logger.log("$TAG start connect to: $address/${config.inputPort}")
+            logger.log("$TAG start connect to: ${config.ipAddress}/${config.inputPort}")
             var attempt = 0
             val socket = Socket()
             do {
