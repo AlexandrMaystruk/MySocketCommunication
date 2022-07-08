@@ -11,13 +11,12 @@ class SocketFactoryImpl(
     private val logger: CommunicationLogger
 ) : SocketFactory {
 
-    override val localeIpAddress: String
-        get() = getLocalIpAddress().orEmpty()
+    override val localeIpAddress = getLocalIpAddress().orEmpty()
 
     override fun create(config: SocketConfiguration): Socket {
         return runCatching {
             val address = InetSocketAddress(config.ipAddress, config.inputPort)
-            logger.log("$TAG Start connect to: $address")
+            logger.log("$TAG start connect to: $address/${config.inputPort}")
             var attempt = 0
             val socket = Socket()
             do {
@@ -50,7 +49,7 @@ class SocketFactoryImpl(
                 .apply {
                     reuseAddress = true
                     val ip = localeIpAddress
-                    logger.log("$TAG create on ip address: $ip")
+                    logger.log("$TAG create server socket: $ip/$port")
                     bind(InetSocketAddress(ip, port), 55)
                 }
         }.getOrElse {
@@ -83,14 +82,14 @@ class SocketFactoryImpl(
                 }
             }
         }.getOrElse {
-            logger.log("$TAG -> getLocalIpAddress error: ${it.localizedMessage}")
+            logger.log("$TAG getLocalIpAddress error: ${it.localizedMessage}")
         }
-        logger.log("$TAG -> getLocalIpAddress return null")
+        logger.log("$TAG getLocalIpAddress return null")
         return null
     }
 
     companion object {
-        private const val TAG = "SocketFactory"
+        private const val TAG = "SocketFactory->"
     }
 
 }

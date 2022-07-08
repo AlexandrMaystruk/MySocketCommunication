@@ -4,8 +4,8 @@ import com.gmail.maystruks08.communicationinterface.entity.TransferData
 
 interface ClientDevice {
 
-    val deviceName: String
     val ipAddress: String
+    val port: Int
 
     suspend fun sendData(data: TransferData)
 

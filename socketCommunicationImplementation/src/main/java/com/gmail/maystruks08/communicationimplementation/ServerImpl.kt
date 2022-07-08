@@ -15,10 +15,11 @@ import kotlinx.coroutines.sync.withLock
 import java.net.ServerSocket
 
 class ServerImpl(
+    private val serverPort: Int,
     private val factory: SocketFactory,
-    private val logger: CommunicationLogger,
     private val dispatcher: CoroutineDispatcher = Dispatchers.IO,
-    private val coroutineScope: CoroutineScope
+    private val coroutineScope: CoroutineScope,
+    private val logger: CommunicationLogger
 ) : Server {
 
     private var serverSocket: ServerSocket? = null
@@ -27,10 +28,8 @@ class ServerImpl(
 
     override fun readFromClients(onNewDataReceived: (TransferData) -> Unit) {
         runCatching {
-            logger.log("Start creation server on port $LOCAL_SERVER_PORT")
-            val socket = factory.createServerSocket(LOCAL_SERVER_PORT).also {
-                serverSocket = it
-            }
+            log("starting ${factory.localeIpAddress}/$serverPort")
+            val socket = factory.createServerSocket(serverPort).also { serverSocket = it }
             while (!socket.isClosed) {
                 val client: Client = ClientImpl(
                     client = socket.accept(),
@@ -39,7 +38,7 @@ class ServerImpl(
                 handleClient(client, onNewDataReceived)
             }
         }.getOrElse {
-            logger.log("Server error: ${it.message}")
+            log("handle clients error: ${it.message}")
             throw RuntimeException("Server error")
         }
     }
@@ -54,8 +53,9 @@ class ServerImpl(
                     }
                 }
             }.onFailure {
-                logger.log("Close server socket error: ${it.message}")
+                log("close socket error: ${it.message}")
             }
+            log("finished")
         }
     }
 
@@ -65,7 +65,7 @@ class ServerImpl(
             mutex.withLock { clients.add(client) }
             try {
                 val dataFromClient = client.read()
-                logger.log("Server received data: $dataFromClient")
+                log("received data")
                 onNewDataReceived.invoke(dataFromClient)
             } catch (remoteError: RemoteError.CommunicationError.ReadFromClientSocketError) {
                 val failureData = TransferData(0, null, remoteError)
@@ -78,7 +78,12 @@ class ServerImpl(
         }
     }
 
-    companion object{
-        const val LOCAL_SERVER_PORT = 8080
+    private fun log(message: String) {
+        logger.log("$TAG $message")
     }
+
+    companion object {
+        const val TAG = "Server->"
+    }
+
 }

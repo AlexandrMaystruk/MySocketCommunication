@@ -1,41 +1,44 @@
 package com.gmail.maystruks08.remotecommunication
 
-import android.annotation.SuppressLint
-import android.content.Context
 import android.net.nsd.NsdServiceInfo
-import com.gmail.maystruks08.communicationinterface.CommunicationLogger
 import com.gmail.maystruks08.communicationinterface.entity.TransferData
+import com.gmail.maystruks08.remotecommunication.controllers.NsdController
+import com.gmail.maystruks08.remotecommunication.controllers.P2pController
+import com.gmail.maystruks08.remotecommunication.controllers.commands.NsdControllerCommand
 import com.gmail.maystruks08.remotecommunication.devices.ClientDevice
 import com.gmail.maystruks08.remotecommunication.devices.DeviceFactory
 import com.gmail.maystruks08.remotecommunication.devices.DeviceFactoryImpl
-import com.gmail.maystruks08.remotecommunication.controllers.NsdController
-import com.gmail.maystruks08.remotecommunication.controllers.commands.NsdControllerCommand
-import com.gmail.maystruks08.remotecommunication.controllers.P2pController
-import kotlinx.coroutines.*
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.launch
 import java.util.concurrent.atomic.AtomicBoolean
 
-@SuppressLint("MissingPermission")
-class CommunicationManagerImpl(
-    private val context: Context,
-    private val coroutineScope: CoroutineScope,
-    private val dispatcher: CoroutineDispatcher = Dispatchers.IO,
-    private val logger: CommunicationLogger
-) : CommunicationManager {
+class CommunicationManagerImpl(config: Configuration) : CommunicationManager {
+
+    private val _coroutineScope = config.app.coroutineScope
+    private val _dispatcher = config.app.dispatcher
+    private val logger = config.app.logger
 
     private var _isStarted = AtomicBoolean(false)
-    private val _clients = mutableSetOf<ClientDevice>()
     private var _listenRemoteDataJob: Job? = null
+    private var _discoverNdsServices: Job? = null
+
+    private val _clients = mutableSetOf<ClientDevice>()
     private val _incomingDataFlow = MutableSharedFlow<TransferData>()
-    private val _p2pManager by lazy { P2pController(context, coroutineScope, dispatcher, logger) }
-    private val _nsdManager by lazy { NsdController(context, logger) }
-    private val _hostDevice by lazy { _deviceFactory.createHost() }
+    private val _p2pManager by lazy {
+        P2pController(config.app.context, config.app.logger)
+    }
+    private val _nsdManager by lazy {
+        NsdController(config.app.context, config.app.appName, config.network.localePort, config.app.logger)
+    }
     private val _deviceFactory: DeviceFactory by lazy {
-        DeviceFactoryImpl(coroutineScope, dispatcher, logger)
+        DeviceFactoryImpl(config)
+    }
+    private val _hostDevice by lazy {
+        _deviceFactory.createHost()
     }
 
-    @Suppress("DEPRECATION")
     override fun onStart() {
         if (_isStarted.get()) {
             log("component already onStart()")
@@ -65,7 +68,7 @@ class CommunicationManagerImpl(
         }
 
         _clients.forEach { clientDevice ->
-            coroutineScope.launch(dispatcher) {
+            _coroutineScope.launch(_dispatcher) {
                 runCatching {
                     clientDevice.sendData(data)
                 }.onFailure {
@@ -89,14 +92,17 @@ class CommunicationManagerImpl(
     }
 
     private fun discoverNdsServices() {
-        coroutineScope.launch(dispatcher) {
+        _discoverNdsServices = _coroutineScope.launch(_dispatcher) {
             _nsdManager.discoverNdsServices().collect {
                 when (it) {
                     is NsdControllerCommand.NewServiceConnected -> {
                         handleNewServiceConnection(it.nsdServiceInfo)
                     }
-                    NsdControllerCommand.ServiceDiscoveryFinished -> {
-
+                    is NsdControllerCommand.ServiceDisconnected -> {
+                        handleServiceDisconnected(it.nsdServiceInfo)
+                    }
+                    is NsdControllerCommand.ServiceDiscoveryFinished -> {
+                        _discoverNdsServices?.cancel()
                     }
                 }
             }
@@ -105,24 +111,29 @@ class CommunicationManagerImpl(
 
     private fun handleNewServiceConnection(nsdServiceInfo: NsdServiceInfo) {
         log("start handle new client")
-        _clients.find { it.deviceName == nsdServiceInfo.serviceName } ?: run {
+        _clients.find { it.ipAddress == nsdServiceInfo.serviceName } ?: run {
             val newDeviceHostAddress = nsdServiceInfo.host.hostAddress ?: return
+            val newDevicePort = nsdServiceInfo.port
             if (newDeviceHostAddress == _hostDevice.ipAddress) return
             _clients.add(_deviceFactory.createClient(
-                deviceName = nsdServiceInfo.serviceName,
-                deviceIpAddress = newDeviceHostAddress
+                deviceIpAddress = newDeviceHostAddress,
+                port = newDevicePort
             ).also {
                 log("new client created")
             })
         }
     }
 
+    private fun handleServiceDisconnected(nsdServiceInfo: NsdServiceInfo) {
+        _clients.removeIf { it.ipAddress == nsdServiceInfo.serviceName }
+    }
+
     private fun runHostDevice() {
         runCatching {
             _listenRemoteDataJob?.cancel()
-            _listenRemoteDataJob = coroutineScope.launch(dispatcher) {
+            _listenRemoteDataJob = _coroutineScope.launch(_dispatcher) {
                 _hostDevice.listenRemoteData().collect {
-                    log("HostDeviceImpl read data $it")
+                    log("host device received data: $it")
                     _incomingDataFlow.emit(it)
                 }
             }
